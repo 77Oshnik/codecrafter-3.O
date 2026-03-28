@@ -101,7 +101,7 @@ router.patch("/:id/title", protect, async (req, res) => {
 // POST /api/chat/:id/message — send a message and get RAG-augmented response
 router.post("/:id/message", protect, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, documentId } = req.body;
 
     if (!message?.trim()) {
       return res.status(400).json({ error: "Message is required." });
@@ -141,7 +141,7 @@ router.post("/:id/message", protect, async (req, res) => {
     let sources = [];
     try {
       const queryEmbedding = await getEmbedding(message.trim());
-      const matches = await queryVectors(queryEmbedding, userId, 5);
+      const matches = await queryVectors(queryEmbedding, userId, 5, documentId || null);
 
       // Only use matches with a meaningful similarity score
       const relevant = matches.filter((m) => m.score > 0.5);

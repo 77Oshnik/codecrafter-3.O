@@ -8,11 +8,13 @@ interface Props {
   conversations: Conversation[]
   activeConversationId: string | null
   documents: Document[]
+  selectedDocumentId: string | null
   onSelectConversation: (id: string) => void
   onNewConversation: () => void
   onDeleteConversation: (id: string) => void
   onUploadDocument: (file: File) => Promise<void>
   onDeleteDocument: (id: string) => void
+  onSelectDocument: (id: string | null) => void
   uploading: boolean
 }
 
@@ -20,11 +22,13 @@ export function ConversationSidebar({
   conversations,
   activeConversationId,
   documents,
+  selectedDocumentId,
   onSelectConversation,
   onNewConversation,
   onDeleteConversation,
   onUploadDocument,
   onDeleteDocument,
+  onSelectDocument,
   uploading,
 }: Props) {
   const [tab, setTab] = useState<"chats" | "docs">("chats")
@@ -143,43 +147,65 @@ export function ConversationSidebar({
               </label>
             </div>
 
+            {selectedDocumentId && (
+              <p className="px-3 pb-1 text-[10px] text-primary font-medium">
+                Filtering chat by selected document
+              </p>
+            )}
             {documents.length === 0 ? (
               <p className="px-4 py-4 text-xs text-muted-foreground text-center">
                 No documents uploaded yet.
               </p>
             ) : (
-              documents.map((doc) => (
-                <div
-                  key={doc._id?.toString?.() || doc.name || Math.random()}
-                  className="group flex items-center gap-2 px-3 py-2 mx-2 rounded-md"
-                >
-                  <FileText className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs truncate">{doc.name}</p>
-                    <p
-                      className={`text-[10px] ${
-                        doc.status === "ready"
-                          ? "text-green-500"
-                          : doc.status === "failed"
-                            ? "text-destructive"
-                            : "text-yellow-500"
-                      }`}
-                    >
-                      {doc.status === "ready"
-                        ? `${doc.chunkCount} chunks`
-                        : doc.status === "failed"
-                          ? "Failed"
-                          : "Processing…"}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => onDeleteDocument(doc._id)}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-destructive transition-all"
+              documents.map((doc) => {
+                const isSelected = selectedDocumentId === doc._id
+                const isReady = doc.status === "ready"
+                return (
+                  <div
+                    key={doc._id?.toString?.() || doc.name || Math.random()}
+                    onClick={() => isReady && onSelectDocument(doc._id)}
+                    className={`group flex items-center gap-2 px-3 py-2 mx-2 rounded-md transition-colors ${
+                      isSelected
+                        ? "bg-primary/10 border border-primary/30"
+                        : isReady
+                          ? "cursor-pointer hover:bg-accent/50"
+                          : "opacity-60"
+                    }`}
+                    title={isReady ? (isSelected ? "Click to deselect" : "Click to filter chat to this document") : undefined}
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))
+                    <FileText
+                      className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs truncate">{doc.name}</p>
+                      <p
+                        className={`text-[10px] ${
+                          doc.status === "ready"
+                            ? "text-green-500"
+                            : doc.status === "failed"
+                              ? "text-destructive"
+                              : "text-yellow-500"
+                        }`}
+                      >
+                        {doc.status === "ready"
+                          ? `${doc.chunkCount} chunks`
+                          : doc.status === "failed"
+                            ? "Failed"
+                            : "Processing…"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteDocument(doc._id)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-destructive transition-all"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )
+              })
             )}
           </div>
         )}

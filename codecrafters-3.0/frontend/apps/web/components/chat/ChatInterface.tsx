@@ -27,6 +27,7 @@ export function ChatInterface() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,7 +93,7 @@ export function ChatInterface() {
 
       try {
         const conversationId = activeId ?? "new"
-        const result = await sendMessage(token, conversationId, text)
+        const result = await sendMessage(token, conversationId, text, selectedDocumentId ?? undefined)
 
         // If this was a new conversation, set the active ID and add to sidebar
         if (!activeId) {
@@ -125,7 +126,7 @@ export function ChatInterface() {
         setIsLoading(false)
       }
     },
-    [token, activeId, isLoading]
+    [token, activeId, isLoading, selectedDocumentId]
   )
 
   const handleUploadDocument = useCallback(
@@ -171,12 +172,17 @@ export function ChatInterface() {
       try {
         await deleteDocument(token, id)
         setDocuments((prev) => prev.filter((d) => d._id !== id))
+        if (selectedDocumentId === id) setSelectedDocumentId(null)
       } catch (e) {
         setError((e as Error).message)
       }
     },
-    [token]
+    [token, selectedDocumentId]
   )
+
+  const handleSelectDocument = useCallback((id: string | null) => {
+    setSelectedDocumentId((prev) => (prev === id ? null : id))
+  }, [])
 
   return (
     <div className="flex h-full w-full overflow-hidden">
@@ -184,16 +190,36 @@ export function ChatInterface() {
         conversations={conversations}
         activeConversationId={activeId}
         documents={documents}
+        selectedDocumentId={selectedDocumentId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
         onUploadDocument={handleUploadDocument}
         onDeleteDocument={handleDeleteDocument}
+        onSelectDocument={handleSelectDocument}
         uploading={uploading}
       />
 
       {/* Main chat area */}
       <main className="flex flex-col flex-1 min-w-0 h-full">
+        {/* Document filter banner */}
+        {selectedDocumentId && (() => {
+          const doc = documents.find((d) => d._id === selectedDocumentId)
+          return doc ? (
+            <div className="flex items-center gap-2 bg-primary/10 border-b border-primary/20 text-primary text-xs px-4 py-2">
+              <span className="flex-1 truncate">
+                Searching only in: <span className="font-medium">{doc.name}</span>
+              </span>
+              <button
+                onClick={() => setSelectedDocumentId(null)}
+                className="underline hover:no-underline flex-shrink-0"
+              >
+                Clear
+              </button>
+            </div>
+          ) : null
+        })()}
+
         {/* Error banner */}
         {error && (
           <div className="bg-destructive/10 border-b border-destructive/30 text-destructive text-xs px-4 py-2">

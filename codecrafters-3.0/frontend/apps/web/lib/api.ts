@@ -15,6 +15,8 @@ export interface Source {
   text: string
   score: number
   documentName: string
+  documentId: string
+  chunkIndex: number
 }
 
 export interface Conversation {
@@ -111,12 +113,13 @@ export interface SendMessageResult {
 export async function sendMessage(
   token: string,
   conversationId: string,
-  message: string
+  message: string,
+  documentId?: string
 ): Promise<SendMessageResult> {
   const res = await fetch(`${BACKEND}/api/chat/${conversationId}/message`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, ...(documentId ? { documentId } : {}) }),
   })
   return handleResponse<SendMessageResult>(res)
 }

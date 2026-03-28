@@ -1,4 +1,5 @@
 const { QdrantClient } = require("@qdrant/js-client-rest");
+const crypto = require("crypto");
 
 let qdrantClient = null;
 
@@ -17,24 +18,30 @@ function getClient() {
 
 const collectionName = process.env.QDRANT_COLLECTION || "codecrafter";
 
-async function ensureUserIdPayloadIndex(client) {
+async function ensurePayloadIndexes(client) {
   const info = await client.getCollection(collectionName);
   const payloadSchema = info?.payload_schema || {};
-  const userIdSchema = payloadSchema.userId;
-  const indexedType =
-    userIdSchema?.data_type || userIdSchema?.field_type || userIdSchema?.type;
 
-  // Qdrant requires a payload index for efficient filtering on keyword fields.
-  if (indexedType === "keyword") {
-    return;
+  const getIndexedType = (schema) =>
+    schema?.data_type || schema?.field_type || schema?.type;
+
+  if (getIndexedType(payloadSchema.userId) !== "keyword") {
+    console.log(`[qdrantService] Creating payload index for "userId" (keyword) on "${collectionName}"`);
+    await client.createPayloadIndex(collectionName, {
+      field_name: "userId",
+      field_schema: "keyword",
+      wait: true,
+    });
   }
 
-  console.log(`[qdrantService] Creating payload index for "userId" (keyword) on "${collectionName}"`);
-  await client.createPayloadIndex(collectionName, {
-    field_name: "userId",
-    field_schema: "keyword",
-    wait: true,
-  });
+  if (getIndexedType(payloadSchema.documentId) !== "keyword") {
+    console.log(`[qdrantService] Creating payload index for "documentId" (keyword) on "${collectionName}"`);
+    await client.createPayloadIndex(collectionName, {
+      field_name: "documentId",
+      field_schema: "keyword",
+      wait: true,
+    });
+  }
 }
 
 /**
@@ -54,7 +61,7 @@ async function ensureCollection(vectorSize = 3072) {
       );
     }
 
-    await ensureUserIdPayloadIndex(client);
+    await ensurePayloadIndexes(client);
     console.log(`[qdrantService] Collection "${collectionName}" already exists`);
   } catch (error) {
     if (error.status === 404) {
@@ -66,7 +73,7 @@ async function ensureCollection(vectorSize = 3072) {
           distance: "Cosine",
         },
       });
-      await ensureUserIdPayloadIndex(client);
+      await ensurePayloadIndexes(client);
       console.log(`[qdrantService] Collection "${collectionName}" created successfully`);
     } else {
       throw error;
@@ -89,7 +96,7 @@ async function upsertVectors(vectors, namespace) {
 
     // Convert vectors to Qdrant point format
     const points = vectors.map((vec) => ({
-      id: hashStringToInt(vec.id), // Qdrant requires integer or UUID ids
+      id: stringToUuid(vec.id), // Qdrant requires integer or UUID ids
       vector: vec.values,
       payload: {
         ...vec.metadata,
@@ -118,9 +125,10 @@ async function upsertVectors(vectors, namespace) {
  * @param {number[]} queryVector
  * @param {string} userId
  * @param {number} topK
+ * @param {string|null} documentId - Optional: restrict search to a specific document
  * @returns {Promise<Array>}
  */
-async function queryVectors(queryVector, userId, topK = 5) {
+async function queryVectors(queryVector, userId, topK = 5, documentId = null) {
   const client = getClient();
 
   try {
@@ -128,19 +136,18 @@ async function queryVectors(queryVector, userId, topK = 5) {
     await ensureCollection(3072);
     const normalizedUserId = String(userId);
 
+    const mustFilters = [
+      { key: "userId", match: { value: normalizedUserId } },
+    ];
+
+    if (documentId) {
+      mustFilters.push({ key: "documentId", match: { value: String(documentId) } });
+    }
+
     const result = await client.search(collectionName, {
       vector: queryVector,
       limit: topK,
-      filter: {
-        must: [
-          {
-            key: "userId",
-            match: {
-              value: normalizedUserId,
-            },
-          },
-        ],
-      },
+      filter: { must: mustFilters },
       with_payload: true,
       with_vector: false,
     });
@@ -172,12 +179,12 @@ async function deleteVectors(ids, userId) {
   const client = getClient();
 
   try {
-    const intIds = ids.map((id) => hashStringToInt(id));
+    const uuidIds = ids.map((id) => stringToUuid(id));
 
     // Delete points by IDs
     await client.delete(collectionName, {
       points_selector: {
-        points: intIds,
+        points: uuidIds,
       },
     });
 
@@ -189,17 +196,14 @@ async function deleteVectors(ids, userId) {
 }
 
 /**
- * Convert string IDs to consistent integers for Qdrant
- * (Qdrant prefers integer point IDs, this creates a stable hash)
+ * Convert string IDs to deterministic UUIDs for Qdrant.
+ * Uses MD5 to produce a 128-bit hash formatted as a UUID string.
+ * This avoids the hash collisions that occurred with 32-bit integers
+ * when multiple documents had chunks that mapped to the same ID.
  */
-function hashStringToInt(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash);
+function stringToUuid(str) {
+  const hash = crypto.createHash("md5").update(str).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
 }
 
 module.exports = { upsertVectors, queryVectors, deleteVectors };
