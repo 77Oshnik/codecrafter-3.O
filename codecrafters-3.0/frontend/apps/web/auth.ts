@@ -1,9 +1,9 @@
-import NextAuth from "next-auth"
+import NextAuth, { type NextAuthConfig } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:5001"
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const authConfig = {
   trustHost: true,
   providers: [
     CredentialsProvider({
@@ -63,4 +63,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session
     },
   },
-})
+} satisfies NextAuthConfig
+
+const nextAuth = NextAuth(authConfig)
+
+export const handlers = nextAuth.handlers
+export const auth = nextAuth.auth
+export const signIn = nextAuth.signIn
+export const signOut = nextAuth.signOut

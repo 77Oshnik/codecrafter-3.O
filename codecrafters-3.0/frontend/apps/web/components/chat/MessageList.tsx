@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import ReactMarkdown from "react-markdown"
+import { useEffect, useRef, type ReactNode } from "react"
 import { Bot, User, ChevronDown } from "lucide-react"
 import type { Message } from "@/lib/api"
 
@@ -61,25 +60,7 @@ export function MessageList({ messages, isLoading }: Props) {
               }`}
             >
               {msg.role === "assistant" ? (
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
-                    code: ({ children }) => (
-                      <code className="bg-background/60 rounded px-1 py-0.5 text-xs font-mono">
-                        {children}
-                      </code>
-                    ),
-                    pre: ({ children }) => (
-                      <pre className="bg-background/60 rounded p-3 overflow-x-auto text-xs font-mono my-2">
-                        {children}
-                      </pre>
-                    ),
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
+                <MarkdownContent content={msg.content} />
               ) : (
                 msg.content
               )}
@@ -110,6 +91,174 @@ export function MessageList({ messages, isLoading }: Props) {
       <div ref={bottomRef} />
     </div>
   )
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  const blocks = parseMarkdownBlocks(content)
+
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, index) => {
+        if (block.type === "paragraph") {
+          return (
+            <p key={index} className="last:mb-0 whitespace-pre-wrap">
+              {renderInlineMarkdown(block.text)}
+            </p>
+          )
+        }
+
+        if (block.type === "ul") {
+          return (
+            <ul key={index} className="list-disc pl-4">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex} className="mb-1 last:mb-0">
+                  {renderInlineMarkdown(item)}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+
+        if (block.type === "ol") {
+          return (
+            <ol key={index} className="list-decimal pl-4">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex} className="mb-1 last:mb-0">
+                  {renderInlineMarkdown(item)}
+                </li>
+              ))}
+            </ol>
+          )
+        }
+
+        return (
+          <pre key={index} className="bg-background/60 my-2 overflow-x-auto rounded p-3 text-xs font-mono">
+            <code>{block.code}</code>
+          </pre>
+        )
+      })}
+    </div>
+  )
+}
+
+type MarkdownBlock =
+  | { type: "paragraph"; text: string }
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] }
+  | { type: "code"; code: string }
+
+function parseMarkdownBlocks(content: string): MarkdownBlock[] {
+  const lines = content.replace(/\r\n/g, "\n").split("\n")
+  const blocks: MarkdownBlock[] = []
+  let paragraphLines: string[] = []
+  let listType: "ul" | "ol" | null = null
+  let listItems: string[] = []
+  let codeLines: string[] = []
+  let inCodeBlock = false
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) return
+    blocks.push({ type: "paragraph", text: paragraphLines.join("\n").trim() })
+    paragraphLines = []
+  }
+
+  const flushList = () => {
+    if (listType && listItems.length > 0) {
+      blocks.push({ type: listType, items: listItems })
+    }
+    listType = null
+    listItems = []
+  }
+
+  const flushCode = () => {
+    if (codeLines.length > 0) {
+      blocks.push({ type: "code", code: codeLines.join("\n") })
+    }
+    codeLines = []
+  }
+
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      if (inCodeBlock) {
+        flushCode()
+      } else {
+        flushParagraph()
+        flushList()
+      }
+      inCodeBlock = !inCodeBlock
+      continue
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line)
+      continue
+    }
+
+    const unorderedMatch = line.match(/^[-*+]\s+(.*)$/)
+    const orderedMatch = line.match(/^\d+\.\s+(.*)$/)
+
+    if (unorderedMatch) {
+      flushParagraph()
+      if (listType === "ol") flushList()
+      listType = "ul"
+      listItems.push(unorderedMatch[1] ?? "")
+      continue
+    }
+
+    if (orderedMatch) {
+      flushParagraph()
+      if (listType === "ul") flushList()
+      listType = "ol"
+      listItems.push(orderedMatch[1] ?? "")
+      continue
+    }
+
+    if (line.trim() === "") {
+      flushParagraph()
+      flushList()
+      continue
+    }
+
+    if (listType) {
+      flushList()
+    }
+    paragraphLines.push(line)
+  }
+
+  if (inCodeBlock) {
+    flushCode()
+  }
+  flushParagraph()
+  flushList()
+
+  return blocks.length > 0 ? blocks : [{ type: "paragraph", text: content }]
+}
+
+function renderInlineMarkdown(text: string): ReactNode {
+  const parts: ReactNode[] = []
+  const regex = /`([^`]+)`/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+
+    const codeText = match[1] ?? ""
+    parts.push(
+      <code key={`${match.index}-${codeText}`} className="rounded bg-background/60 px-1 py-0.5 font-mono text-xs">
+        {codeText}
+      </code>,
+    )
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+
+  return parts.length > 0 ? parts : text
 }
 
 function SourcesAccordion({ sources }: { sources: NonNullable<Message["sources"]> }) {
