@@ -7,6 +7,7 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const authRoutes = require("./routes/auth");
 const chatRoutes = require("./routes/chat");
 const documentRoutes = require("./routes/documents");
+const studyRoutes = require("./routes/study");
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/study", studyRoutes);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

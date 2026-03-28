@@ -15,7 +15,12 @@ import { ConversationSidebar } from "./ConversationSidebar"
 import { MessageList } from "./MessageList"
 import { MessageInput } from "./MessageInput"
 import { StudyToolsPanel } from "./StudyToolsPanel"
+<<<<<<< HEAD
 import type { StudyTool } from "./StudyToolsPanel"
+=======
+import { QuizModal } from "./QuizModal"
+import { FlashcardsModal } from "./FlashcardsModal"
+>>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
 import {
   listConversations,
   getConversation,
@@ -26,10 +31,27 @@ import {
   uploadDocument,
   deleteDocument,
   generateDocumentSummary,
+<<<<<<< HEAD
   generateConversationRevision,
+=======
+  generateQuiz,
+  getQuizById,
+  checkQuizAnswer,
+  submitQuiz,
+  listStudySidebarData,
+  createStudyResource,
+  generateFlashcards,
+  getFlashcardsById,
+>>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
   type Conversation,
   type Message,
   type Document,
+  type GeneratedQuiz,
+  type QuizFeedbackItem,
+  type QuizSubmissionResult,
+  type GeneratedFlashcards,
+  type StudyResourceItem,
+  type StudyResultItem,
 } from "@/lib/api"
 
 function buildRevisionBullets(text: string): string[] {
@@ -58,12 +80,26 @@ export function ChatInterface() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [studyResources, setStudyResources] = useState<StudyResourceItem[]>([])
+  const [studyResults, setStudyResults] = useState<StudyResultItem[]>([])
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null)
   const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null)
+<<<<<<< HEAD
   const [revisionText, setRevisionText] = useState("")
   const [revisionBullets, setRevisionBullets] = useState<string[]>([])
   const [revisionFileName, setRevisionFileName] = useState("revision-notes.md")
   const [generatingRevision, setGeneratingRevision] = useState(false)
+=======
+  const [quizModalOpen, setQuizModalOpen] = useState(false)
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false)
+  const [isCheckingQuizAnswer, setIsCheckingQuizAnswer] = useState(false)
+  const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false)
+  const [activeQuiz, setActiveQuiz] = useState<GeneratedQuiz | null>(null)
+  const [quizLiveFeedback, setQuizLiveFeedback] = useState<Array<QuizFeedbackItem | null>>([])
+  const [quizResult, setQuizResult] = useState<QuizSubmissionResult | null>(null)
+  const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false)
+  const [activeFlashcards, setActiveFlashcards] = useState<GeneratedFlashcards | null>(null)
+>>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,8 +118,13 @@ export function ChatInterface() {
     if (!token || !activeId) {
       setMessages([])
       setDocuments([])
+<<<<<<< HEAD
       setRevisionText("")
       setRevisionBullets([])
+=======
+      setStudyResources([])
+      setStudyResults([])
+>>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
       return
     }
     getConversation(token, activeId)
@@ -92,7 +133,28 @@ export function ChatInterface() {
     listDocuments(token, activeId)
       .then(setDocuments)
       .catch(() => {})
+
+    listStudySidebarData(token, activeId)
+      .then(({ resources, results }) => {
+        setStudyResources(resources)
+        setStudyResults(results)
+      })
+      .catch(() => {})
   }, [token, activeId])
+
+  const refreshStudySidebar = useCallback(
+    async (conversationId: string) => {
+      if (!token) return
+      try {
+        const { resources, results } = await listStudySidebarData(token, conversationId)
+        setStudyResources(resources)
+        setStudyResults(results)
+      } catch {
+        // Non-fatal: sidebar can remain stale until next refresh.
+      }
+    },
+    [token]
+  )
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -190,9 +252,11 @@ export function ChatInterface() {
         }
 
         setMessages((prev) => [...prev, result.message])
+        return result.conversationId
       } catch (e) {
         setError((e as Error).message)
         setMessages((prev) => prev.slice(0, -1))
+        return null
       } finally {
         setIsLoading(false)
       }
@@ -307,6 +371,7 @@ export function ChatInterface() {
     e.target.value = ""
   }
 
+<<<<<<< HEAD
   const handleSelectStudyTool = useCallback(
     (tool: StudyTool) => {
       if (tool.id === "revision") {
@@ -316,6 +381,170 @@ export function ChatInterface() {
       void handleSendMessage(tool.prompt)
     },
     [handleGenerateRevision, handleSendMessage]
+=======
+  const handleSubmitQuiz = useCallback(
+    async (answers: number[]) => {
+      if (!token || !activeQuiz) return
+      setIsSubmittingQuiz(true)
+      try {
+        const { result } = await submitQuiz(token, activeQuiz.id, answers)
+        setQuizResult(result)
+        if (activeId) {
+          await refreshStudySidebar(activeId)
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setIsSubmittingQuiz(false)
+      }
+    },
+    [token, activeQuiz, activeId, refreshStudySidebar]
+  )
+
+  const handleCheckQuizAnswer = useCallback(
+    async (questionIndex: number, selectedOptionIndex: number) => {
+      if (!token || !activeQuiz) return
+      setIsCheckingQuizAnswer(true)
+      try {
+        const { feedback } = await checkQuizAnswer(token, activeQuiz.id, questionIndex, selectedOptionIndex)
+        setQuizLiveFeedback((prev) => {
+          const next = [...prev]
+          next[questionIndex] = feedback
+          return next
+        })
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setIsCheckingQuizAnswer(false)
+      }
+    },
+    [token, activeQuiz]
+  )
+
+  const openSavedQuiz = useCallback(
+    async (quizId: string) => {
+      if (!token || !quizId) return
+      setIsGeneratingQuiz(true)
+      setError(null)
+      try {
+        const { quiz } = await getQuizById(token, quizId)
+        setActiveQuiz(quiz)
+        setQuizLiveFeedback(Array.from({ length: quiz.questions.length }, () => null))
+        setQuizResult(null)
+        setQuizModalOpen(true)
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setIsGeneratingQuiz(false)
+      }
+    },
+    [token]
+  )
+
+  const handleSelectStudyTool = useCallback(
+    async (toolId: string, prompt: string) => {
+      if (!token) return
+
+      if (toolId === "quiz") {
+        if (!activeId) {
+          setError("Please open a conversation with uploaded documents before generating a quiz.")
+          return
+        }
+
+        setIsGeneratingQuiz(true)
+        setQuizResult(null)
+        try {
+          const { quiz } = await generateQuiz(token, activeId)
+          setActiveQuiz(quiz)
+          setQuizLiveFeedback(Array.from({ length: quiz.questions.length }, () => null))
+          setQuizModalOpen(true)
+          await refreshStudySidebar(activeId)
+        } catch (e) {
+          setError((e as Error).message)
+        } finally {
+          setIsGeneratingQuiz(false)
+        }
+        return
+      }
+
+      if (toolId === "flashcards") {
+        if (!activeId) {
+          setError("Please open a conversation with uploaded documents before generating flashcards.")
+          return
+        }
+
+        setIsGeneratingQuiz(true)
+        try {
+          const { flashcards } = await generateFlashcards(token, activeId)
+          setActiveFlashcards(flashcards)
+          setFlashcardsModalOpen(true)
+          await refreshStudySidebar(activeId)
+        } catch (e) {
+          setError((e as Error).message)
+        } finally {
+          setIsGeneratingQuiz(false)
+        }
+        return
+      }
+
+      const conversationId = await handleSendMessage(prompt)
+      if (!conversationId) return
+
+      const titleByType: Record<string, string> = {
+        flashcards: "Flashcards",
+        flowchart: "Flowchart",
+        mindmap: "Mind Map",
+        summary: "Summary",
+        revision: "Revision",
+        youtube: "YouTube Learning Plan",
+      }
+
+      try {
+        await createStudyResource(token, {
+          conversationId,
+          type: toolId as StudyResourceItem["type"],
+          title: titleByType[toolId] || "Study Resource",
+          description: "Generated from document context via Study Tools.",
+        })
+        await refreshStudySidebar(conversationId)
+      } catch {
+        // Resource tracking failure should not block chat output.
+      }
+    },
+    [token, activeId, handleSendMessage, refreshStudySidebar]
+  )
+
+  const openSavedFlashcards = useCallback(
+    async (flashcardsId: string) => {
+      if (!token || !flashcardsId) return
+      setIsGeneratingQuiz(true)
+      setError(null)
+      try {
+        const { flashcards } = await getFlashcardsById(token, flashcardsId)
+        setActiveFlashcards(flashcards)
+        setFlashcardsModalOpen(true)
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setIsGeneratingQuiz(false)
+      }
+    },
+    [token]
+  )
+
+  const openStudyResource = useCallback(
+    async (type: StudyResourceItem["type"], resourceRefId: string) => {
+      if (!resourceRefId) return
+      if (type === "quiz") {
+        await openSavedQuiz(resourceRefId)
+        return
+      }
+      if (type === "flashcards") {
+        await openSavedFlashcards(resourceRefId)
+      }
+    },
+    [openSavedQuiz, openSavedFlashcards]
+>>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
   )
 
   return (
@@ -374,25 +603,26 @@ export function ChatInterface() {
 
             {/* Accordion items */}
             {documents.length > 0 && (
-              <div className="max-h-[240px] divide-y divide-border overflow-y-auto border-t border-border">
-                {documents.map((doc) => {
-                  const isOpen = expandedDocId === doc._id
+              <div className="max-h-60 divide-y divide-border overflow-y-auto border-t border-border">
+                {documents.map((doc, index) => {
+                  const docId = doc._id || `${doc.name}-${doc.createdAt ?? "unknown"}-${index}`
+                  const isOpen = expandedDocId === docId
                   return (
-                    <div key={doc._id}>
+                    <div key={docId}>
                       {/* Header row */}
                       <div className="flex items-center gap-2 px-4 py-2">
                         {doc.status === "processing" ? (
-                          <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-yellow-500" />
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-yellow-500" />
                         ) : doc.status === "ready" ? (
-                          <CheckCircle className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
                         ) : (
-                          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-destructive" />
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
                         )}
-                        <FileText className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="flex-1 truncate text-xs">{doc.name}</span>
 
                         {doc.status === "ready" && (
-                          <span className="flex-shrink-0 text-[10px] text-muted-foreground">
+                          <span className="shrink-0 text-[10px] text-muted-foreground">
                             {doc.chunkCount} chunks
                           </span>
                         )}
@@ -400,12 +630,12 @@ export function ChatInterface() {
                         {/* Generate summary button */}
                         {doc.status === "ready" && !doc.summary && (
                           <button
-                            onClick={() => handleGenerateSummary(doc._id)}
-                            disabled={generatingSummaryId === doc._id}
-                            className="flex-shrink-0 text-[10px] text-primary underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => handleGenerateSummary(docId)}
+                            disabled={generatingSummaryId === docId}
+                            className="shrink-0 text-[10px] text-primary underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-50"
                             title="Generate summary"
                           >
-                            {generatingSummaryId === doc._id ? (
+                            {generatingSummaryId === docId ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
                               "Summarize"
@@ -416,7 +646,7 @@ export function ChatInterface() {
                         {/* Expand toggle */}
                         {doc.status === "ready" && doc.summary && (
                           <button
-                            onClick={() => setExpandedDocId(isOpen ? null : doc._id)}
+                            onClick={() => setExpandedDocId(isOpen ? null : docId)}
                             className="rounded p-0.5 transition-colors hover:bg-accent"
                             title={isOpen ? "Hide summary" : "Show summary"}
                           >
@@ -429,9 +659,9 @@ export function ChatInterface() {
                         <button
                           onClick={() => {
                             if (isOpen) setExpandedDocId(null)
-                            handleDeleteDocument(doc._id)
+                            handleDeleteDocument(docId)
                           }}
-                          className="flex-shrink-0 rounded p-0.5 transition-colors hover:text-destructive"
+                          className="shrink-0 rounded p-0.5 transition-colors hover:text-destructive"
                           title="Remove document"
                         >
                           <X className="h-3.5 w-3.5" />
@@ -461,7 +691,7 @@ export function ChatInterface() {
 
         <aside className="hidden h-full w-96 min-w-96 border-l border-border lg:flex xl:w-104 xl:min-w-104">
           <StudyToolsPanel
-            disabled={isLoading || !token}
+            disabled={isLoading || !token || isGeneratingQuiz || isSubmittingQuiz}
             onSelectTool={handleSelectStudyTool}
             canGenerateRevision={Boolean(token && activeId && documents.length > 0)}
             generatingRevision={generatingRevision}
@@ -470,9 +700,40 @@ export function ChatInterface() {
             onGenerateRevision={() => void handleGenerateRevision()}
             onDownloadRevision={handleDownloadRevision}
             variant="sidebar"
+            resources={studyResources}
+            results={studyResults}
+            onOpenResource={(type, resourceRefId) => {
+              void openStudyResource(type, resourceRefId)
+            }}
           />
         </aside>
       </main>
+
+      <QuizModal
+        open={quizModalOpen}
+        quiz={activeQuiz}
+        liveFeedback={quizLiveFeedback}
+        finalResult={quizResult}
+        checking={isCheckingQuizAnswer}
+        submitting={isSubmittingQuiz}
+        onClose={() => {
+          setQuizModalOpen(false)
+          setActiveQuiz(null)
+          setQuizLiveFeedback([])
+          setQuizResult(null)
+        }}
+        onCheckAnswer={handleCheckQuizAnswer}
+        onSubmit={handleSubmitQuiz}
+      />
+
+      <FlashcardsModal
+        open={flashcardsModalOpen}
+        deck={activeFlashcards}
+        onClose={() => {
+          setFlashcardsModalOpen(false)
+          setActiveFlashcards(null)
+        }}
+      />
     </div>
   )
 }

@@ -37,6 +37,71 @@ export interface Document {
   summary?: string
 }
 
+export interface QuizQuestionPublic {
+  questionNumber: number
+  question: string
+  options: string[]
+}
+
+export interface GeneratedQuiz {
+  id: string
+  title: string
+  createdAt: string
+  questions: QuizQuestionPublic[]
+}
+
+export interface QuizFeedbackItem {
+  question: string
+  options: string[]
+  selectedOptionIndex: number
+  correctOptionIndex: number
+  isCorrect: boolean
+  selectedReason: string
+  correctReason: string
+}
+
+export interface QuizSubmissionResult {
+  id: string
+  quizId: string
+  quizTitle: string
+  score: number
+  total: number
+  percentage: number
+  createdAt: string
+  feedback: QuizFeedbackItem[]
+}
+
+export interface FlashcardItem {
+  question: string
+  answer: string
+}
+
+export interface GeneratedFlashcards {
+  id: string
+  title: string
+  createdAt: string
+  cards: FlashcardItem[]
+}
+
+export interface StudyResourceItem {
+  id: string
+  type: "quiz" | "flashcards" | "flowchart" | "mindmap" | "summary" | "revision" | "youtube"
+  title: string
+  description: string
+  resourceRefId: string
+  createdAt: string
+}
+
+export interface StudyResultItem {
+  id: string
+  quizId: string
+  quizTitle: string
+  score: number
+  total: number
+  percentage: number
+  createdAt: string
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -151,7 +216,26 @@ export async function uploadDocument(
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
   })
-  return handleResponse<{ document: Document }>(res)
+
+  type UploadDocumentWire = {
+    document: Omit<Document, "_id" | "chunkCount"> & {
+      _id?: string
+      id?: string
+      chunkCount?: number
+    }
+  }
+
+  const payload = await handleResponse<UploadDocumentWire>(res)
+  const wireDoc = payload.document
+  const { id, _id, chunkCount, ...rest } = wireDoc
+
+  return {
+    document: {
+      ...rest,
+      _id: _id ?? id ?? `temp-${Date.now()}`,
+      chunkCount: chunkCount ?? 0,
+    },
+  }
 }
 
 export async function generateDocumentSummary(
@@ -190,4 +274,105 @@ export async function deleteDocument(token: string, id: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   })
   return handleResponse<void>(res)
+}
+
+// ---------------------------------------------------------------------------
+// Study tools
+// ---------------------------------------------------------------------------
+export async function generateQuiz(
+  token: string,
+  conversationId: string
+): Promise<{ quiz: GeneratedQuiz }> {
+  const res = await fetch(`${BACKEND}/api/study/quiz/generate`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ conversationId }),
+  })
+  return handleResponse<{ quiz: GeneratedQuiz }>(res)
+}
+
+export async function getQuizById(
+  token: string,
+  quizId: string
+): Promise<{ quiz: GeneratedQuiz }> {
+  const res = await fetch(`${BACKEND}/api/study/quiz/${quizId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ quiz: GeneratedQuiz }>(res)
+}
+
+export async function submitQuiz(
+  token: string,
+  quizId: string,
+  answers: number[]
+): Promise<{ result: QuizSubmissionResult }> {
+  const res = await fetch(`${BACKEND}/api/study/quiz/${quizId}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ answers }),
+  })
+  return handleResponse<{ result: QuizSubmissionResult }>(res)
+}
+
+export async function checkQuizAnswer(
+  token: string,
+  quizId: string,
+  questionIndex: number,
+  selectedOptionIndex: number
+): Promise<{ feedback: QuizFeedbackItem }> {
+  const res = await fetch(`${BACKEND}/api/study/quiz/${quizId}/check`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ questionIndex, selectedOptionIndex }),
+  })
+  return handleResponse<{ feedback: QuizFeedbackItem }>(res)
+}
+
+export async function listStudySidebarData(
+  token: string,
+  conversationId: string
+): Promise<{ resources: StudyResourceItem[]; results: StudyResultItem[] }> {
+  const res = await fetch(`${BACKEND}/api/study/sidebar?conversationId=${conversationId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ resources: StudyResourceItem[]; results: StudyResultItem[] }>(res)
+}
+
+export async function generateFlashcards(
+  token: string,
+  conversationId: string
+): Promise<{ flashcards: GeneratedFlashcards }> {
+  const res = await fetch(`${BACKEND}/api/study/flashcards/generate`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ conversationId }),
+  })
+  return handleResponse<{ flashcards: GeneratedFlashcards }>(res)
+}
+
+export async function getFlashcardsById(
+  token: string,
+  flashcardsId: string
+): Promise<{ flashcards: GeneratedFlashcards }> {
+  const res = await fetch(`${BACKEND}/api/study/flashcards/${flashcardsId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ flashcards: GeneratedFlashcards }>(res)
+}
+
+export async function createStudyResource(
+  token: string,
+  payload: {
+    conversationId: string
+    type: StudyResourceItem["type"]
+    title: string
+    description?: string
+  }
+): Promise<{ resource: StudyResourceItem }> {
+  const res = await fetch(`${BACKEND}/api/study/resource`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  })
+  return handleResponse<{ resource: StudyResourceItem }>(res)
 }

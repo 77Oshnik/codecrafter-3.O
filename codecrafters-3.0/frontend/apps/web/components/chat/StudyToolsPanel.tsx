@@ -15,6 +15,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
+import type { StudyResourceItem, StudyResultItem } from "@/lib/api"
 
 export interface StudyTool {
   id: string
@@ -29,6 +30,9 @@ interface Props {
   disabled?: boolean
   onSelectTool: (tool: StudyTool) => void
   variant?: "inline" | "sidebar"
+  resources?: StudyResourceItem[]
+  results?: StudyResultItem[]
+  onOpenResource?: (type: StudyResourceItem["type"], resourceRefId: string) => void
   canGenerateRevision?: boolean
   generatingRevision?: boolean
   revisionText?: string
@@ -113,8 +117,10 @@ export function StudyToolsPanel({
   revisionBullets = [],
   onGenerateRevision,
   onDownloadRevision,
-}: Props) {
-  const isSidebar = variant === "sidebar"
+  resources = [],
+  results = [],
+  onOpenResource,
+}: Props) {  const isSidebar = variant === "sidebar"
   const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false)
 
   useEffect(() => {
@@ -181,6 +187,66 @@ export function StudyToolsPanel({
               </button>
             )
           })}
+
+          {isSidebar && (
+            <>
+              <div className="mt-3 border-t border-border pt-3">
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Results</h4>
+                {results.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                    No quiz attempts yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {results.slice(0, 8).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => item.quizId && onOpenResource?.("quiz", item.quizId)}
+                        className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left transition-colors hover:bg-accent/40"
+                      >
+                        <p className="line-clamp-1 text-xs font-medium">{item.quizTitle}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Score: {item.score}/{item.total} ({item.percentage}%)
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 border-t border-border pt-3">
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Study Resources</h4>
+                {resources.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                    No resources generated yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {resources.slice(0, 10).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          if ((item.type === "quiz" || item.type === "flashcards") && item.resourceRefId) {
+                            onOpenResource?.(item.type, item.resourceRefId)
+                          }
+                        }}
+                        className={`w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left transition-colors ${
+                          item.type === "quiz" || item.type === "flashcards"
+                            ? "hover:bg-accent/40"
+                            : "cursor-default"
+                        }`}
+                      >
+                        <p className="line-clamp-1 text-xs font-medium">{item.title}</p>
+                        <p className="text-[11px] capitalize text-muted-foreground">{item.type}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
