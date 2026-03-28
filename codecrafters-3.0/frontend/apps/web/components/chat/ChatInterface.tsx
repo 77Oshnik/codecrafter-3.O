@@ -15,12 +15,9 @@ import { ConversationSidebar } from "./ConversationSidebar"
 import { MessageList } from "./MessageList"
 import { MessageInput } from "./MessageInput"
 import { StudyToolsPanel } from "./StudyToolsPanel"
-<<<<<<< HEAD
 import type { StudyTool } from "./StudyToolsPanel"
-=======
 import { QuizModal } from "./QuizModal"
 import { FlashcardsModal } from "./FlashcardsModal"
->>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
 import {
   listConversations,
   getConversation,
@@ -31,9 +28,7 @@ import {
   uploadDocument,
   deleteDocument,
   generateDocumentSummary,
-<<<<<<< HEAD
   generateConversationRevision,
-=======
   generateQuiz,
   getQuizById,
   checkQuizAnswer,
@@ -42,7 +37,6 @@ import {
   createStudyResource,
   generateFlashcards,
   getFlashcardsById,
->>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
   type Conversation,
   type Message,
   type Document,
@@ -84,12 +78,6 @@ export function ChatInterface() {
   const [studyResults, setStudyResults] = useState<StudyResultItem[]>([])
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null)
   const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null)
-<<<<<<< HEAD
-  const [revisionText, setRevisionText] = useState("")
-  const [revisionBullets, setRevisionBullets] = useState<string[]>([])
-  const [revisionFileName, setRevisionFileName] = useState("revision-notes.md")
-  const [generatingRevision, setGeneratingRevision] = useState(false)
-=======
   const [quizModalOpen, setQuizModalOpen] = useState(false)
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false)
   const [isCheckingQuizAnswer, setIsCheckingQuizAnswer] = useState(false)
@@ -99,7 +87,10 @@ export function ChatInterface() {
   const [quizResult, setQuizResult] = useState<QuizSubmissionResult | null>(null)
   const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false)
   const [activeFlashcards, setActiveFlashcards] = useState<GeneratedFlashcards | null>(null)
->>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
+  const [revisionText, setRevisionText] = useState("")
+  const [revisionBullets, setRevisionBullets] = useState<string[]>([])
+  const [revisionFileName, setRevisionFileName] = useState("revision-notes.md")
+  const [generatingRevision, setGeneratingRevision] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -118,13 +109,8 @@ export function ChatInterface() {
     if (!token || !activeId) {
       setMessages([])
       setDocuments([])
-<<<<<<< HEAD
       setRevisionText("")
       setRevisionBullets([])
-=======
-      setStudyResources([])
-      setStudyResults([])
->>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
       return
     }
     getConversation(token, activeId)
@@ -371,17 +357,6 @@ export function ChatInterface() {
     e.target.value = ""
   }
 
-<<<<<<< HEAD
-  const handleSelectStudyTool = useCallback(
-    (tool: StudyTool) => {
-      if (tool.id === "revision") {
-        void handleGenerateRevision()
-        return
-      }
-      void handleSendMessage(tool.prompt)
-    },
-    [handleGenerateRevision, handleSendMessage]
-=======
   const handleSubmitQuiz = useCallback(
     async (answers: number[]) => {
       if (!token || !activeQuiz) return
@@ -442,8 +417,11 @@ export function ChatInterface() {
   )
 
   const handleSelectStudyTool = useCallback(
-    async (toolId: string, prompt: string) => {
+    async (tool: StudyTool) => {
       if (!token) return
+
+      const toolId = tool.id
+      const prompt = tool.prompt
 
       if (toolId === "quiz") {
         if (!activeId) {
@@ -544,7 +522,6 @@ export function ChatInterface() {
       }
     },
     [openSavedQuiz, openSavedFlashcards]
->>>>>>> c20f8eca587b4866e7ec66e04fed78297f56aadd
   )
 
   return (
