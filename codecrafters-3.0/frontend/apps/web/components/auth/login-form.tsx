@@ -27,7 +27,7 @@ export function LoginForm() {
     })
 
     if (result?.error) {
-      setError("Invalid email or password.")
+      setError("Invalid credentials or email not verified yet. Please verify your email first.")
       setLoading(false)
       return
     }

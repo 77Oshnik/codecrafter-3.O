@@ -1,10 +1,33 @@
-const { Resend } = require("resend");
+const nodemailer = require("nodemailer");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+const smtpSecure = (process.env.SMTP_SECURE || "false").toLowerCase() === "true";
+const defaultFrom = process.env.EMAIL_FROM || smtpUser;
+
+function createTransporter() {
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error("SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and EMAIL_FROM in backend/.env.");
+  }
+
+  return nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+}
 
 async function sendVerificationEmail(email, name, otp) {
-  await resend.emails.send({
-    from: process.env.EMAIL_FROM || "noreply@yourdomain.com",
+  const transporter = createTransporter();
+
+  const info = await transporter.sendMail({
+    from: defaultFrom,
     to: email,
     subject: "Your verification code",
     html: `
@@ -23,6 +46,8 @@ async function sendVerificationEmail(email, name, otp) {
       </html>
     `,
   });
+
+  return info;
 }
 
 module.exports = { sendVerificationEmail };

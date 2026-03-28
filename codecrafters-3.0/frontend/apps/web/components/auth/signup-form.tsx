@@ -7,7 +7,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Button } from "@workspace/ui/components/button"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5001"
 
 export function SignupForm() {
   const router = useRouter()
@@ -28,21 +28,26 @@ export function SignupForm() {
 
     setLoading(true)
 
-    const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
-    })
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error ?? "Something went wrong.")
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.")
+        return
+      }
+
+      router.push(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`)
+    } catch {
+      setError("Could not reach the server. Make sure the backend is running.")
+    } finally {
       setLoading(false)
-      return
     }
-
-    router.push(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`)
   }
 
   return (

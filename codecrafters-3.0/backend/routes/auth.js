@@ -11,6 +11,16 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function mapEmailDeliveryError(error) {
+  const message = error?.message || "Email delivery failed.";
+
+  if (message.toLowerCase().includes("smtp is not configured")) {
+    return "SMTP is not configured. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and EMAIL_FROM in backend/.env.";
+  }
+
+  return message;
+}
+
 // POST /api/auth/register
 router.post("/register", async (req, res) => {
   try {
@@ -50,9 +60,17 @@ router.post("/register", async (req, res) => {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
 
-    await sendVerificationEmail(normalizedEmail, name.trim(), otp);
-
-    return res.status(201).json({ message: "Verification code sent. Please check your email." });
+    try {
+      await sendVerificationEmail(normalizedEmail, name.trim(), otp);
+      return res.status(201).json({ message: "Verification code sent. Please check your email." });
+    } catch (emailErr) {
+      const deliveryError = mapEmailDeliveryError(emailErr);
+      console.error("[register] Email send failed:", deliveryError);
+      return res.status(202).json({
+        message: "Account created, but we could not deliver the verification email.",
+        warning: deliveryError,
+      });
+    }
   } catch (err) {
     console.error("[register]", err);
     return res.status(500).json({ error: "Something went wrong. Please try again." });
@@ -125,9 +143,14 @@ router.post("/resend-otp", async (req, res) => {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
 
-    await sendVerificationEmail(normalizedEmail, user.name, otp);
-
-    return res.json({ message: "A new verification code has been sent." });
+    try {
+      await sendVerificationEmail(normalizedEmail, user.name, otp);
+      return res.json({ message: "A new verification code has been sent." });
+    } catch (emailErr) {
+      const deliveryError = mapEmailDeliveryError(emailErr);
+      console.error("[resend-otp] Email send failed:", deliveryError);
+      return res.status(400).json({ error: deliveryError });
+    }
   } catch (err) {
     console.error("[resend-otp]", err);
     return res.status(500).json({ error: "Something went wrong. Please try again." });

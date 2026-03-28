@@ -1,9 +1,10 @@
 import NextAuth from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:5000"
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:5001"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -14,26 +15,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: credentials.email,
-            password: credentials.password,
-          }),
-        })
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password,
+            }),
+          })
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error ?? "Invalid credentials.")
-        }
+          if (!res.ok) return null
 
-        const user = await res.json()
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          backendToken: user.token,
+          const user = await res.json()
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            backendToken: user.token,
+          }
+        } catch {
+          return null
         }
       },
     }),

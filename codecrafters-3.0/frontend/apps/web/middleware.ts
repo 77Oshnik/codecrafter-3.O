@@ -6,7 +6,7 @@ const authRoutes = ["/login", "/signup", "/verify-email"]
 
 export default auth((req) => {
   const { nextUrl, auth: session } = req
-  const isLoggedIn = !!session
+  const isLoggedIn = !!session?.user
 
   const isProtected = protectedRoutes.some((route) => nextUrl.pathname.startsWith(route))
   const isAuthRoute = authRoutes.some((route) => nextUrl.pathname.startsWith(route))
