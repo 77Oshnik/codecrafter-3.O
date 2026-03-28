@@ -6,10 +6,12 @@ const Quiz = require("../models/quiz");
 const QuizResult = require("../models/quizResult");
 const StudyResource = require("../models/studyResource");
 const FlashcardSet = require("../models/flashcardSet");
+const FlowchartSet = require("../models/flowchartSet");
 const {
   getEmbedding,
   generateQuizFromContext,
   generateFlashcardsFromContext,
+  generateFlowchartFromContext,
 } = require("../services/geminiService");
 const { queryVectors } = require("../services/qdrantService");
 
@@ -271,6 +273,108 @@ router.get("/flashcards/:id", protect, async (req, res) => {
   } catch (err) {
     console.error("[study/flashcards/get]", err);
     return res.status(500).json({ error: "Failed to load flashcards." });
+  }
+});
+
+// POST /api/study/flowchart/generate
+router.post("/flowchart/generate", protect, async (req, res) => {
+  try {
+    const { conversationId, flowchartPreference = "" } = req.body;
+    if (!conversationId) {
+      return res.status(400).json({ error: "conversationId is required." });
+    }
+
+    const conversation = await Conversation.findOne({ _id: conversationId, userId: req.user.id });
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found." });
+    }
+
+    const readyDocCount = await Document.countDocuments({
+      userId: req.user.id,
+      conversationId,
+      status: "ready",
+    });
+
+    if (readyDocCount === 0) {
+      return res.status(400).json({ error: "No ready documents found for this conversation." });
+    }
+
+    const { context, sourceDocumentIds } = await buildStudyContext({
+      userId: req.user.id,
+      conversationId,
+      intentPrompt: String(flowchartPreference).trim()
+        ? String(flowchartPreference).trim()
+        : "Create The Flowchart Based on key concepts and step-by-step process from these documents.",
+    });
+
+    if (!context) {
+      return res.status(400).json({ error: "Not enough document context to generate flowchart." });
+    }
+
+    let flowchartPayload;
+    try {
+      flowchartPayload = await generateFlowchartFromContext(context, String(flowchartPreference || ""));
+    } catch (_firstErr) {
+      flowchartPayload = await generateFlowchartFromContext(context, String(flowchartPreference || ""));
+    }
+
+    const set = await FlowchartSet.create({
+      userId: req.user.id,
+      conversationId,
+      title: flowchartPayload.title,
+      steps: flowchartPayload.steps,
+      mermaidCode: flowchartPayload.mermaidCode,
+      sourceDocumentIds,
+    });
+
+    await StudyResource.create({
+      userId: req.user.id,
+      conversationId,
+      type: "flowchart",
+      title: set.title,
+      description: "Step-by-step flowchart generated from uploaded document context.",
+      resourceRefId: set._id.toString(),
+    });
+
+    return res.status(201).json({
+      flowchart: {
+        id: set._id,
+        title: set.title,
+        createdAt: set.createdAt,
+        steps: set.steps,
+        mermaidCode: set.mermaidCode,
+      },
+    });
+  } catch (err) {
+    console.error("[study/flowchart/generate]", err);
+    const message = err?.message || "Failed to generate flowchart.";
+    if (/insufficient document context|cannot be supported by the context/i.test(message)) {
+      return res.status(400).json({ error: message });
+    }
+    return res.status(500).json({ error: message });
+  }
+});
+
+// GET /api/study/flowchart/:id
+router.get("/flowchart/:id", protect, async (req, res) => {
+  try {
+    const set = await FlowchartSet.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!set) {
+      return res.status(404).json({ error: "Flowchart not found." });
+    }
+
+    return res.json({
+      flowchart: {
+        id: set._id,
+        title: set.title,
+        createdAt: set.createdAt,
+        steps: set.steps,
+        mermaidCode: set.mermaidCode,
+      },
+    });
+  } catch (err) {
+    console.error("[study/flowchart/get]", err);
+    return res.status(500).json({ error: "Failed to load flowchart." });
   }
 });
 

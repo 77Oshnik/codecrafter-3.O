@@ -309,6 +309,110 @@ ${context.slice(0, 40000)}`;
   };
 }
 
+function buildLinearMermaidFromSteps(steps) {
+  const lines = ["flowchart TD"];
+  for (let i = 0; i < steps.length; i++) {
+    const nodeId = `S${i + 1}`;
+    const safeLabel = String(steps[i]).replace(/[\[\]"]+/g, "").trim();
+    lines.push(`  ${nodeId}["${safeLabel}"]`);
+    if (i < steps.length - 1) {
+      lines.push(`  ${nodeId} --> S${i + 2}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Generate flowchart steps and Mermaid code from context.
+ * @param {string} context
+ * @param {string} [flowchartPreference]
+ * @returns {Promise<{title: string, steps: string[], mermaidCode: string}>}
+ */
+async function generateFlowchartFromContext(context, flowchartPreference = "") {
+  const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+  const normalizedPreference = String(flowchartPreference || "").trim();
+
+  const prompt = `Create a process flowchart from the document context.
+
+Return ONLY valid JSON in this shape:
+{
+  "title": "string",
+  "steps": ["step 1", "step 2", "step 3"],
+  "mermaidCode": "flowchart TD\\nA[Start] --> B[Next]",
+  "insufficientContext": false,
+  "reason": "string"
+}
+
+Rules:
+- steps must contain at least 5 clear logical steps.
+- First create the steps sequence, then convert it to Mermaid flowchart code.
+- Mermaid code must be valid and start with "flowchart TD".
+- Keep labels concise and readable.
+- Use ONLY the document context. Do NOT add any knowledge outside the context.
+- You may refine, re-order, and summarize context facts for clarity.
+- If the requested preference cannot be supported by the context, return:
+  - insufficientContext: true
+  - reason: short explanation
+  - steps: []
+  - mermaidCode: ""
+- Output JSON only.
+- Base content strictly on context below.
+
+User flowchart preference:
+${normalizedPreference || "No extra preference provided."}
+
+Context:
+${context.slice(0, 45000)}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(extractJsonBlock(text));
+  } catch (_error) {
+    throw new Error("Failed to parse flowchart JSON from Gemini response.");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Flowchart payload is malformed.");
+  }
+
+  if (parsed.insufficientContext === true) {
+    throw new Error(
+      parsed.reason && typeof parsed.reason === "string"
+        ? parsed.reason
+        : "Insufficient document context to generate this flowchart preference."
+    );
+  }
+
+  if (!Array.isArray(parsed.steps) || parsed.steps.length < 5) {
+    throw new Error("Flowchart must include at least 5 steps.");
+  }
+
+  const cleanedSteps = parsed.steps
+    .map((step) => (typeof step === "string" ? step.trim() : ""))
+    .filter(Boolean);
+
+  if (cleanedSteps.length < 5) {
+    throw new Error("Flowchart must include at least 5 non-empty steps.");
+  }
+
+  const candidateCode = typeof parsed.mermaidCode === "string" ? parsed.mermaidCode.trim() : "";
+  const mermaidCode = /^flowchart\s+/i.test(candidateCode)
+    ? candidateCode
+    : buildLinearMermaidFromSteps(cleanedSteps);
+
+  return {
+    title: typeof parsed.title === "string" && parsed.title.trim()
+      ? parsed.title.trim()
+      : "Document Flowchart",
+    steps: cleanedSteps,
+    mermaidCode,
+  };
+}
+
 module.exports = {
   getEmbedding,
   generateChatResponse,
@@ -316,4 +420,5 @@ module.exports = {
   generateRevisionNotes,
   generateQuizFromContext,
   generateFlashcardsFromContext,
+  generateFlowchartFromContext,
 };

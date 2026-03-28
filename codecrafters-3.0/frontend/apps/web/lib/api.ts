@@ -83,9 +83,17 @@ export interface GeneratedFlashcards {
   cards: FlashcardItem[]
 }
 
+export interface GeneratedFlowchart {
+  id: string
+  title: string
+  createdAt: string
+  steps: string[]
+  mermaidCode: string
+}
+
 export interface StudyResourceItem {
   id: string
-  type: "quiz" | "flashcards" | "flowchart" | "mindmap" | "summary" | "revision" | "youtube"
+  type: "quiz" | "flashcards" | "flowchart" | "revision" | "youtube"
   title: string
   description: string
   resourceRefId: string
@@ -372,6 +380,29 @@ export async function getFlashcardsById(
     headers: { Authorization: `Bearer ${token}` },
   })
   return handleResponse<{ flashcards: GeneratedFlashcards }>(res)
+}
+
+export async function generateFlowchart(
+  token: string,
+  conversationId: string,
+  flowchartPreference?: string
+): Promise<{ flowchart: GeneratedFlowchart }> {
+  const res = await fetch(`${BACKEND}/api/study/flowchart/generate`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ conversationId, flowchartPreference }),
+  })
+  return handleResponse<{ flowchart: GeneratedFlowchart }>(res)
+}
+
+export async function getFlowchartById(
+  token: string,
+  flowchartId: string
+): Promise<{ flowchart: GeneratedFlowchart }> {
+  const res = await fetch(`${BACKEND}/api/study/flowchart/${flowchartId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ flowchart: GeneratedFlowchart }>(res)
 }
 
 export async function createStudyResource(

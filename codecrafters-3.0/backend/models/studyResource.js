@@ -16,7 +16,7 @@ const studyResourceSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["quiz", "flashcards", "flowchart", "mindmap", "summary", "revision", "youtube"],
+      enum: ["quiz", "flashcards", "flowchart", "revision", "youtube"],
       required: true,
     },
     title: { type: String, required: true },

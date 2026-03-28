@@ -19,6 +19,8 @@ import { StudyToolsPanel } from "./StudyToolsPanel"
 import type { StudyTool } from "./StudyToolsPanel"
 import { QuizModal } from "./QuizModal"
 import { FlashcardsModal } from "./FlashcardsModal"
+import { FlowchartModal } from "./FlowchartModal"
+import { FlowchartPromptModal } from "./FlowchartPromptModal"
 import {
   listConversations,
   getConversation,
@@ -38,6 +40,8 @@ import {
   createStudyResource,
   generateFlashcards,
   getFlashcardsById,
+  generateFlowchart,
+  getFlowchartById,
   type Conversation,
   type Message,
   type Document,
@@ -45,6 +49,7 @@ import {
   type QuizFeedbackItem,
   type QuizSubmissionResult,
   type GeneratedFlashcards,
+  type GeneratedFlowchart,
   type StudyResourceItem,
   type StudyResultItem,
 } from "@/lib/api"
@@ -89,6 +94,9 @@ export function ChatInterface() {
   const [quizResult, setQuizResult] = useState<QuizSubmissionResult | null>(null)
   const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false)
   const [activeFlashcards, setActiveFlashcards] = useState<GeneratedFlashcards | null>(null)
+  const [flowchartModalOpen, setFlowchartModalOpen] = useState(false)
+  const [activeFlowchart, setActiveFlowchart] = useState<GeneratedFlowchart | null>(null)
+  const [flowchartPromptOpen, setFlowchartPromptOpen] = useState(false)
   const [revisionText, setRevisionText] = useState("")
   const [revisionBullets, setRevisionBullets] = useState<string[]>([])
   const [revisionFileName, setRevisionFileName] = useState("revision-notes.md")
@@ -473,14 +481,22 @@ export function ChatInterface() {
         return
       }
 
+      if (toolId === "flowchart") {
+        if (!activeId) {
+          setError("Please open a conversation with uploaded documents before generating flowchart.")
+          return
+        }
+
+        setFlowchartPromptOpen(true)
+        return
+      }
+
       const conversationId = await handleSendMessage(prompt)
       if (!conversationId) return
 
       const titleByType: Record<string, string> = {
         flashcards: "Flashcards",
         flowchart: "Flowchart",
-        mindmap: "Mind Map",
-        summary: "Summary",
         revision: "Revision",
         youtube: "YouTube Learning Plan",
       }
@@ -518,6 +534,49 @@ export function ChatInterface() {
     [token]
   )
 
+  const openSavedFlowchart = useCallback(
+    async (flowchartId: string) => {
+      if (!token || !flowchartId) return
+      setIsGeneratingQuiz(true)
+      setError(null)
+      try {
+        const { flowchart } = await getFlowchartById(token, flowchartId)
+        setActiveFlowchart(flowchart)
+        setFlowchartModalOpen(true)
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setIsGeneratingQuiz(false)
+      }
+    },
+    [token]
+  )
+
+  const handleGenerateFlowchartFromPreference = useCallback(
+    async (flowchartPreference: string) => {
+      if (!token) return
+      if (!activeId) {
+        setError("Please open a conversation with uploaded documents before generating flowchart.")
+        return
+      }
+
+      setIsGeneratingQuiz(true)
+      setError(null)
+      try {
+        const { flowchart } = await generateFlowchart(token, activeId, flowchartPreference)
+        setActiveFlowchart(flowchart)
+        setFlowchartModalOpen(true)
+        setFlowchartPromptOpen(false)
+        await refreshStudySidebar(activeId)
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setIsGeneratingQuiz(false)
+      }
+    },
+    [token, activeId, refreshStudySidebar]
+  )
+
   const openStudyResource = useCallback(
     async (type: StudyResourceItem["type"], resourceRefId: string) => {
       if (!resourceRefId) return
@@ -527,9 +586,13 @@ export function ChatInterface() {
       }
       if (type === "flashcards") {
         await openSavedFlashcards(resourceRefId)
+        return
+      }
+      if (type === "flowchart") {
+        await openSavedFlowchart(resourceRefId)
       }
     },
-    [openSavedQuiz, openSavedFlashcards]
+    [openSavedQuiz, openSavedFlashcards, openSavedFlowchart]
   )
 
   return (
@@ -717,6 +780,27 @@ export function ChatInterface() {
         onClose={() => {
           setFlashcardsModalOpen(false)
           setActiveFlashcards(null)
+        }}
+      />
+
+      <FlowchartModal
+        open={flowchartModalOpen}
+        flowchart={activeFlowchart}
+        onClose={() => {
+          setFlowchartModalOpen(false)
+          setActiveFlowchart(null)
+        }}
+      />
+
+      <FlowchartPromptModal
+        open={flowchartPromptOpen}
+        loading={isGeneratingQuiz}
+        onClose={() => {
+          if (isGeneratingQuiz) return
+          setFlowchartPromptOpen(false)
+        }}
+        onSubmit={(fullPrompt) => {
+          void handleGenerateFlowchartFromPreference(fullPrompt)
         }}
       />
     </div>

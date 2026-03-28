@@ -6,6 +6,7 @@ const Quiz = require("../models/quiz");
 const QuizResult = require("../models/quizResult");
 const StudyResource = require("../models/studyResource");
 const FlashcardSet = require("../models/flashcardSet");
+const FlowchartSet = require("../models/flowchartSet");
 const YouTubeVideo = require("../models/youtubeVideo");
 const { getEmbedding, generateChatResponse } = require("../services/geminiService");
 const { queryVectors, deleteVectors } = require("../services/qdrantService");
@@ -84,6 +85,7 @@ router.delete("/:id", protect, async (req, res) => {
     await Document.deleteMany({ conversationId: req.params.id });
     await Quiz.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
     await FlashcardSet.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
+    await FlowchartSet.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
     await QuizResult.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
     await StudyResource.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
 

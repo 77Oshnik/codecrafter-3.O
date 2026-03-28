@@ -70,24 +70,6 @@ const studyTools: StudyTool[] = [
     accent: "from-violet-500/15 to-fuchsia-500/10",
   },
   {
-    id: "mindmap",
-    title: "Mind Map",
-    description: "Map ideas and relationships",
-    icon: Brain,
-    prompt:
-      "Create a hierarchical mind map from the uploaded content with main topic, branches, sub-branches, and key details.",
-    accent: "from-emerald-500/15 to-green-500/10",
-  },
-  {
-    id: "summary",
-    title: "Summary",
-    description: "Get a compact topic summary",
-    icon: FileText,
-    prompt:
-      "Summarize the uploaded documents into a concise, high-value summary with key points and important takeaways.",
-    accent: "from-cyan-500/15 to-teal-500/10",
-  },
-  {
     id: "revision",
     title: "Revision",
     description: "Rapid exam-style revision",
@@ -228,12 +210,15 @@ export function StudyToolsPanel({
                         key={item.id}
                         type="button"
                         onClick={() => {
-                          if ((item.type === "quiz" || item.type === "flashcards") && item.resourceRefId) {
+                          if (
+                            (item.type === "quiz" || item.type === "flashcards" || item.type === "flowchart") &&
+                            item.resourceRefId
+                          ) {
                             onOpenResource?.(item.type, item.resourceRefId)
                           }
                         }}
                         className={`w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left transition-colors ${
-                          item.type === "quiz" || item.type === "flashcards"
+                          item.type === "quiz" || item.type === "flashcards" || item.type === "flowchart"
                             ? "hover:bg-accent/40"
                             : "cursor-default"
                         }`}
