@@ -113,13 +113,12 @@ export interface SendMessageResult {
 export async function sendMessage(
   token: string,
   conversationId: string,
-  message: string,
-  documentId?: string
+  message: string
 ): Promise<SendMessageResult> {
   const res = await fetch(`${BACKEND}/api/chat/${conversationId}/message`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ message, ...(documentId ? { documentId } : {}) }),
+    body: JSON.stringify({ message }),
   })
   return handleResponse<SendMessageResult>(res)
 }
@@ -127,16 +126,24 @@ export async function sendMessage(
 // ---------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------
-export async function listDocuments(token: string): Promise<Document[]> {
-  const res = await fetch(`${BACKEND}/api/documents`, {
+export async function listDocuments(token: string, conversationId?: string): Promise<Document[]> {
+  const url = conversationId
+    ? `${BACKEND}/api/documents?conversationId=${conversationId}`
+    : `${BACKEND}/api/documents`
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
   return handleResponse<Document[]>(res)
 }
 
-export async function uploadDocument(token: string, file: File): Promise<{ document: Document }> {
+export async function uploadDocument(
+  token: string,
+  file: File,
+  conversationId: string
+): Promise<{ document: Document }> {
   const formData = new FormData()
   formData.append("pdf", file)
+  formData.append("conversationId", conversationId)
 
   const res = await fetch(`${BACKEND}/api/documents/upload`, {
     method: "POST",

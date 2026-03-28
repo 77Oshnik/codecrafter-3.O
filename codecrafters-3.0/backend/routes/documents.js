@@ -113,6 +113,7 @@ router.post("/upload", protect, upload.single("pdf"), async (req, res) => {
     }
 
     const userId = req.user.id;
+    const { conversationId } = req.body;
     const fileName = req.file.originalname.replace(/\s+/g, "_");
     const publicId = `${userId}_${Date.now()}_${fileName}`;
 
@@ -122,6 +123,7 @@ router.post("/upload", protect, upload.single("pdf"), async (req, res) => {
     // 2. Create document record (status: processing)
     const doc = await Document.create({
       userId,
+      conversationId: conversationId || undefined,
       name: req.file.originalname,
       cloudinaryUrl: cloudResult.secure_url,
       cloudinaryPublicId: cloudResult.public_id,
@@ -177,6 +179,7 @@ async function processPDF(doc, buffer, userId) {
         documentId: doc._id.toString(),
         documentName: doc.name,
         userId,
+        conversationId: doc.conversationId ? doc.conversationId.toString() : null,
         chunkId: id,
         chunkIndex: i,
       },
@@ -195,11 +198,13 @@ async function processPDF(doc, buffer, userId) {
   });
 }
 
-// GET /api/documents
+// GET /api/documents?conversationId=xxx
 router.get("/", protect, async (req, res) => {
   try {
-    const docs = await Document.find({ userId: req.user.id })
-      .select("name status chunkCount cloudinaryUrl createdAt")
+    const filter = { userId: req.user.id };
+    if (req.query.conversationId) filter.conversationId = req.query.conversationId;
+    const docs = await Document.find(filter)
+      .select("name status chunkCount cloudinaryUrl createdAt conversationId")
       .sort({ createdAt: -1 });
     return res.json(docs);
   } catch (err) {

@@ -34,10 +34,10 @@ async function ensurePayloadIndexes(client) {
     });
   }
 
-  if (getIndexedType(payloadSchema.documentId) !== "keyword") {
-    console.log(`[qdrantService] Creating payload index for "documentId" (keyword) on "${collectionName}"`);
+  if (getIndexedType(payloadSchema.conversationId) !== "keyword") {
+    console.log(`[qdrantService] Creating payload index for "conversationId" (keyword) on "${collectionName}"`);
     await client.createPayloadIndex(collectionName, {
-      field_name: "documentId",
+      field_name: "conversationId",
       field_schema: "keyword",
       wait: true,
     });
@@ -121,14 +121,14 @@ async function upsertVectors(vectors, namespace) {
 }
 
 /**
- * Query Qdrant for nearest neighbors with user-scoped filtering.
+ * Query Qdrant for nearest neighbors scoped to a specific conversation.
  * @param {number[]} queryVector
  * @param {string} userId
  * @param {number} topK
- * @param {string|null} documentId - Optional: restrict search to a specific document
+ * @param {string|null} conversationId - Restrict search to documents in this conversation
  * @returns {Promise<Array>}
  */
-async function queryVectors(queryVector, userId, topK = 5, documentId = null) {
+async function queryVectors(queryVector, userId, topK = 5, conversationId = null) {
   const client = getClient();
 
   try {
@@ -140,8 +140,8 @@ async function queryVectors(queryVector, userId, topK = 5, documentId = null) {
       { key: "userId", match: { value: normalizedUserId } },
     ];
 
-    if (documentId) {
-      mustFilters.push({ key: "documentId", match: { value: String(documentId) } });
+    if (conversationId) {
+      mustFilters.push({ key: "conversationId", match: { value: String(conversationId) } });
     }
 
     const result = await client.search(collectionName, {

@@ -1,8 +1,10 @@
 const express = require("express");
 const { protect } = require("../middleware/auth");
 const Conversation = require("../models/conversation");
+const Document = require("../models/document");
 const { getEmbedding, generateChatResponse } = require("../services/geminiService");
-const { queryVectors } = require("../services/qdrantService");
+const { queryVectors, deleteVectors } = require("../services/qdrantService");
+const { deletePDF } = require("../services/cloudinaryService");
 
 const router = express.Router();
 
@@ -54,7 +56,7 @@ router.get("/:id", protect, async (req, res) => {
   }
 });
 
-// DELETE /api/chat/:id — delete a conversation
+// DELETE /api/chat/:id — delete a conversation and its associated documents
 router.delete("/:id", protect, async (req, res) => {
   try {
     const result = await Conversation.deleteOne({
@@ -65,6 +67,16 @@ router.delete("/:id", protect, async (req, res) => {
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: "Conversation not found." });
     }
+
+    // Cascade: delete all documents belonging to this conversation
+    const docs = await Document.find({ conversationId: req.params.id, userId: req.user.id });
+    for (const doc of docs) {
+      if (doc.vectorIds?.length > 0) {
+        await deleteVectors(doc.vectorIds, req.user.id).catch(() => {});
+      }
+      await deletePDF(doc.cloudinaryPublicId).catch(() => {});
+    }
+    await Document.deleteMany({ conversationId: req.params.id });
 
     return res.json({ message: "Conversation deleted." });
   } catch (err) {
@@ -101,7 +113,7 @@ router.patch("/:id/title", protect, async (req, res) => {
 // POST /api/chat/:id/message — send a message and get RAG-augmented response
 router.post("/:id/message", protect, async (req, res) => {
   try {
-    const { message, documentId } = req.body;
+    const { message } = req.body;
 
     if (!message?.trim()) {
       return res.status(400).json({ error: "Message is required." });
@@ -139,12 +151,14 @@ router.post("/:id/message", protect, async (req, res) => {
     // 3. RAG: embed the user query and retrieve similar chunks
     let context = "";
     let sources = [];
+    const hasDocuments =
+      (await Document.countDocuments({ conversationId: conversation._id, status: "ready" })) > 0;
     try {
       const queryEmbedding = await getEmbedding(message.trim());
-      const matches = await queryVectors(queryEmbedding, userId, 5, documentId || null);
+      const matches = await queryVectors(queryEmbedding, userId, 5, conversation._id.toString());
 
-      // Only use matches with a meaningful similarity score
-      const relevant = matches.filter((m) => m.score > 0.5);
+      // Only use matches with a strong similarity score (>0.65 avoids tangential keyword matches)
+      const relevant = matches.filter((m) => m.score > 0.65);
       if (relevant.length > 0) {
         const seen = new Set();
         const uniqueRelevant = relevant.filter((m) => {
@@ -175,7 +189,16 @@ router.post("/:id/message", protect, async (req, res) => {
     }
 
     // 4. Generate AI response
-    const aiText = await generateChatResponse(historyForGemini, context);
+    // Short-circuit: don't call the LLM at all when there's no relevant context —
+    // the model will always add general knowledge regardless of instructions.
+    let aiText;
+    if (!hasDocuments) {
+      aiText = "No documents have been uploaded to this chat. Please upload a PDF to get started.";
+    } else if (!context) {
+      aiText = "The uploaded documents don't have information about this topic.";
+    } else {
+      aiText = await generateChatResponse(historyForGemini, context);
+    }
 
     // 5. Append the assistant message
     conversation.messages.push({

@@ -51,14 +51,17 @@ async function getEmbedding(text) {
  * @param {string} context - Retrieved document chunks joined as a string
  * @returns {Promise<string>}
  */
+/**
+ * @param {Array<{role: 'user'|'assistant', content: string}>} messages
+ * @param {string} context - Retrieved document chunks (only called when context is non-empty)
+ */
 async function generateChatResponse(messages, context) {
-  const systemInstruction = context
-    ? `You are a helpful AI assistant. Use the following context retrieved from the user's documents to answer questions accurately. If the answer is not in the context, say so and still try to be helpful based on your own knowledge.
+  const systemInstruction = `You are a helpful AI assistant with access to document context uploaded by the user.
+Answer the user's question using the document context below. Cite it naturally in your response.
 
 --- DOCUMENT CONTEXT ---
 ${context}
---- END CONTEXT ---`
-    : "You are a helpful AI assistant. Answer the user's questions clearly and concisely.";
+--- END CONTEXT ---`;
 
   const model = getClient().getGenerativeModel({
     model: "gemini-2.5-flash",

@@ -96,9 +96,23 @@ export function MessageList({ messages, isLoading }: Props) {
 function MarkdownContent({ content }: { content: string }) {
   const blocks = parseMarkdownBlocks(content)
 
+  const headingClass: Record<1 | 2 | 3, string> = {
+    1: "text-base font-bold mt-1",
+    2: "text-sm font-bold mt-1",
+    3: "text-sm font-semibold mt-0.5",
+  }
+
   return (
     <div className="space-y-2">
       {blocks.map((block, index) => {
+        if (block.type === "heading") {
+          return (
+            <p key={index} className={headingClass[block.level]}>
+              {renderInlineMarkdown(block.text)}
+            </p>
+          )
+        }
+
         if (block.type === "paragraph") {
           return (
             <p key={index} className="last:mb-0 whitespace-pre-wrap">
@@ -109,9 +123,9 @@ function MarkdownContent({ content }: { content: string }) {
 
         if (block.type === "ul") {
           return (
-            <ul key={index} className="list-disc pl-4">
+            <ul key={index} className="list-disc pl-4 space-y-0.5">
               {block.items.map((item, itemIndex) => (
-                <li key={itemIndex} className="mb-1 last:mb-0">
+                <li key={itemIndex}>
                   {renderInlineMarkdown(item)}
                 </li>
               ))}
@@ -121,9 +135,9 @@ function MarkdownContent({ content }: { content: string }) {
 
         if (block.type === "ol") {
           return (
-            <ol key={index} className="list-decimal pl-4">
+            <ol key={index} className="list-decimal pl-4 space-y-0.5">
               {block.items.map((item, itemIndex) => (
-                <li key={itemIndex} className="mb-1 last:mb-0">
+                <li key={itemIndex}>
                   {renderInlineMarkdown(item)}
                 </li>
               ))}
@@ -143,6 +157,7 @@ function MarkdownContent({ content }: { content: string }) {
 
 type MarkdownBlock =
   | { type: "paragraph"; text: string }
+  | { type: "heading"; level: 1 | 2 | 3; text: string }
   | { type: "ul"; items: string[] }
   | { type: "ol"; items: string[] }
   | { type: "code"; code: string }
@@ -194,6 +209,15 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
       continue
     }
 
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/)
+    if (headingMatch) {
+      flushParagraph()
+      flushList()
+      const level = Math.min(headingMatch[1]!.length, 3) as 1 | 2 | 3
+      blocks.push({ type: "heading", level, text: headingMatch[2] ?? "" })
+      continue
+    }
+
     const unorderedMatch = line.match(/^[-*+]\s+(.*)$/)
     const orderedMatch = line.match(/^\d+\.\s+(.*)$/)
 
@@ -236,7 +260,8 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
 
 function renderInlineMarkdown(text: string): ReactNode {
   const parts: ReactNode[] = []
-  const regex = /`([^`]+)`/g
+  // Matches **bold** and `code` in one pass
+  const regex = /\*\*(.+?)\*\*|`([^`]+)`/g
   let lastIndex = 0
   let match: RegExpExecArray | null
 
@@ -245,12 +270,20 @@ function renderInlineMarkdown(text: string): ReactNode {
       parts.push(text.slice(lastIndex, match.index))
     }
 
-    const codeText = match[1] ?? ""
-    parts.push(
-      <code key={`${match.index}-${codeText}`} className="rounded bg-background/60 px-1 py-0.5 font-mono text-xs">
-        {codeText}
-      </code>,
-    )
+    if (match[1] !== undefined) {
+      parts.push(
+        <strong key={match.index} className="font-semibold">
+          {match[1]}
+        </strong>
+      )
+    } else if (match[2] !== undefined) {
+      parts.push(
+        <code key={match.index} className="rounded bg-background/60 px-1 py-0.5 font-mono text-xs">
+          {match[2]}
+        </code>
+      )
+    }
+
     lastIndex = regex.lastIndex
   }
 

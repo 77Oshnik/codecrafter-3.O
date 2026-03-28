@@ -8,6 +8,11 @@ const documentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    conversationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Conversation",
+      index: true,
+    },
     name: { type: String, required: true },
     cloudinaryUrl: { type: String, required: true },
     cloudinaryPublicId: { type: String, required: true },
