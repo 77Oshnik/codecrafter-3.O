@@ -2,11 +2,20 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Paperclip, X, CheckCircle, AlertCircle, ChevronDown, FileText } from "lucide-react"
+import {
+  Loader2,
+  Paperclip,
+  X,
+  CheckCircle,
+  AlertCircle,
+  ChevronDown,
+  FileText,
+} from "lucide-react"
 import { ConversationSidebar } from "./ConversationSidebar"
 import { MessageList } from "./MessageList"
 import { MessageInput } from "./MessageInput"
 import { StudyToolsPanel } from "./StudyToolsPanel"
+import type { StudyTool } from "./StudyToolsPanel"
 import {
   listConversations,
   getConversation,
@@ -17,10 +26,29 @@ import {
   uploadDocument,
   deleteDocument,
   generateDocumentSummary,
+  generateConversationRevision,
   type Conversation,
   type Message,
   type Document,
 } from "@/lib/api"
+
+function buildRevisionBullets(text: string): string[] {
+  const lines = text.split("\n").map((line) => line.trim())
+  const explicitBullets = lines
+    .map((line) => line.replace(/^([-*+]\s+|\d+\.\s+)/, "").trim())
+    .filter((line, index) => line.length > 0 && /^([-*+]\s+|\d+\.\s+)/.test(lines[index] ?? ""))
+
+  if (explicitBullets.length > 0) {
+    return explicitBullets.slice(0, 12)
+  }
+
+  return text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0)
+    .slice(0, 8)
+}
 
 export function ChatInterface() {
   const { data: session } = useSession()
@@ -32,6 +60,10 @@ export function ChatInterface() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null)
   const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null)
+  const [revisionText, setRevisionText] = useState("")
+  const [revisionBullets, setRevisionBullets] = useState<string[]>([])
+  const [revisionFileName, setRevisionFileName] = useState("revision-notes.md")
+  const [generatingRevision, setGeneratingRevision] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +82,8 @@ export function ChatInterface() {
     if (!token || !activeId) {
       setMessages([])
       setDocuments([])
+      setRevisionText("")
+      setRevisionBullets([])
       return
     }
     getConversation(token, activeId)
@@ -225,6 +259,48 @@ export function ChatInterface() {
     [token, generatingSummaryId]
   )
 
+  const handleGenerateRevision = useCallback(async () => {
+    if (!token || !activeId || generatingRevision) return
+    if (documents.length === 0) {
+      setError("Upload at least one document before generating revision.")
+      return
+    }
+
+    setGeneratingRevision(true)
+    setError(null)
+    try {
+      const result = await generateConversationRevision(token, activeId)
+      setRevisionText(result.revision)
+      setRevisionBullets(buildRevisionBullets(result.revision))
+      setRevisionFileName(result.fileName || "revision-notes.md")
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setGeneratingRevision(false)
+    }
+  }, [token, activeId, generatingRevision, documents.length])
+
+  const handleDownloadRevision = useCallback(() => {
+    if (!revisionText) return
+
+    const downloadText =
+      revisionBullets.length > 0
+        ? `${revisionText}\n\n## Quick Bullet Points\n${revisionBullets
+            .map((point) => `- ${point}`)
+            .join("\n")}`
+        : revisionText
+
+    const blob = new Blob([downloadText], { type: "text/markdown;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = revisionFileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }, [revisionText, revisionBullets, revisionFileName])
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) handleUploadDocument(file)
@@ -232,10 +308,14 @@ export function ChatInterface() {
   }
 
   const handleSelectStudyTool = useCallback(
-    (prompt: string) => {
-      void handleSendMessage(prompt)
+    (tool: StudyTool) => {
+      if (tool.id === "revision") {
+        void handleGenerateRevision()
+        return
+      }
+      void handleSendMessage(tool.prompt)
     },
-    [handleSendMessage]
+    [handleGenerateRevision, handleSendMessage]
   )
 
   return (
@@ -369,6 +449,7 @@ export function ChatInterface() {
                 })}
               </div>
             )}
+
           </div>
 
           <MessageInput
@@ -382,6 +463,12 @@ export function ChatInterface() {
           <StudyToolsPanel
             disabled={isLoading || !token}
             onSelectTool={handleSelectStudyTool}
+            canGenerateRevision={Boolean(token && activeId && documents.length > 0)}
+            generatingRevision={generatingRevision}
+            revisionText={revisionText}
+            revisionBullets={revisionBullets}
+            onGenerateRevision={() => void handleGenerateRevision()}
+            onDownloadRevision={handleDownloadRevision}
             variant="sidebar"
           />
         </aside>

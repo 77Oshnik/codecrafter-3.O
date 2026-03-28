@@ -100,4 +100,32 @@ ${text.slice(0, 12000)}`;
   return result.response.text();
 }
 
-module.exports = { getEmbedding, generateChatResponse, generateSummary };
+/**
+ * Generate revision notes from multiple document summaries.
+ * @param {Array<{name: string, summary: string}>} documents
+ * @returns {Promise<string>}
+ */
+async function generateRevisionNotes(documents) {
+  const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+  const prepared = documents
+    .map((doc, idx) => `Document ${idx + 1}: ${doc.name}\n${doc.summary || "(No summary available)"}`)
+    .join("\n\n");
+
+  const prompt = `Create high-quality revision notes from the document summaries below.
+
+Requirements:
+- Output in Markdown only.
+- Use bullet points heavily.
+- Add short section headings.
+- Keep content concise, exam-oriented, and easy to revise.
+- Include important definitions, facts, formulas, and takeaways where available.
+
+Document summaries:
+${prepared}`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+module.exports = { getEmbedding, generateChatResponse, generateSummary, generateRevisionNotes };

@@ -1,17 +1,22 @@
 "use client"
 
+import { useEffect, useState } from "react"
+
 import {
   Brain,
+  Download,
   FileText,
   GitBranch,
   HelpCircle,
   Layers,
+  Loader2,
   PlayCircle,
   RefreshCcw,
+  X,
   type LucideIcon,
 } from "lucide-react"
 
-interface StudyTool {
+export interface StudyTool {
   id: string
   title: string
   description: string
@@ -22,8 +27,14 @@ interface StudyTool {
 
 interface Props {
   disabled?: boolean
-  onSelectTool: (prompt: string) => void
+  onSelectTool: (tool: StudyTool) => void
   variant?: "inline" | "sidebar"
+  canGenerateRevision?: boolean
+  generatingRevision?: boolean
+  revisionText?: string
+  revisionBullets?: string[]
+  onGenerateRevision?: () => void
+  onDownloadRevision?: () => void
 }
 
 const studyTools: StudyTool[] = [
@@ -92,8 +103,25 @@ const studyTools: StudyTool[] = [
   },
 ]
 
-export function StudyToolsPanel({ disabled = false, onSelectTool, variant = "inline" }: Props) {
+export function StudyToolsPanel({
+  disabled = false,
+  onSelectTool,
+  variant = "inline",
+  canGenerateRevision = false,
+  generatingRevision = false,
+  revisionText = "",
+  revisionBullets = [],
+  onGenerateRevision,
+  onDownloadRevision,
+}: Props) {
   const isSidebar = variant === "sidebar"
+  const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false)
+
+  useEffect(() => {
+    if (generatingRevision || revisionText || revisionBullets.length > 0) {
+      setIsRevisionDialogOpen(true)
+    }
+  }, [generatingRevision, revisionText, revisionBullets.length])
 
   return (
     <section
@@ -130,15 +158,24 @@ export function StudyToolsPanel({ disabled = false, onSelectTool, variant = "inl
               <button
                 key={tool.id}
                 type="button"
-                onClick={() => onSelectTool(tool.prompt)}
-                disabled={disabled}
+                onClick={() => {
+                  if (tool.id === "revision") {
+                    setIsRevisionDialogOpen(true)
+                    onGenerateRevision?.()
+                    return
+                  }
+                  onSelectTool(tool)
+                }}
+                disabled={disabled || (tool.id === "revision" && !canGenerateRevision) || (tool.id === "revision" && generatingRevision)}
                 className={`w-full text-left rounded-xl border border-border bg-linear-to-br ${tool.accent} p-3 transition-all hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <div className="mb-1.5 flex items-center gap-2">
                   <span className="rounded-md border border-border/70 bg-background/60 p-1">
                     <Icon className="h-3.5 w-3.5" />
                   </span>
-                  <span className="text-sm font-medium">{tool.title}</span>
+                  <span className="text-sm font-medium">
+                    {tool.id === "revision" && generatingRevision ? "Generating..." : tool.title}
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">{tool.description}</p>
               </button>
@@ -146,6 +183,69 @@ export function StudyToolsPanel({ disabled = false, onSelectTool, variant = "inl
           })}
         </div>
       </div>
+
+      {isRevisionDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold">Revision Sheet</p>
+              <button
+                type="button"
+                onClick={() => setIsRevisionDialogOpen(false)}
+                className="rounded p-1 transition-colors hover:bg-accent"
+                aria-label="Close revision dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-4 py-3">
+              {generatingRevision ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating revision sheet...
+                </div>
+              ) : (
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted/20 p-3 text-xs leading-relaxed text-foreground">
+                  {revisionText || "No revision generated yet."}
+                </pre>
+              )}
+
+              {!generatingRevision && revisionBullets.length > 0 && (
+                <div className="mt-3 rounded bg-muted/20 p-3">
+                  <p className="mb-1 text-xs font-semibold text-foreground">Quick Bullet Points</p>
+                  <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                    {revisionBullets.map((point, index) => (
+                      <li key={`${point}-${index}`}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+              <button
+                type="button"
+                onClick={onGenerateRevision}
+                disabled={disabled || !canGenerateRevision || generatingRevision}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingRevision && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Regenerate
+              </button>
+              <button
+                type="button"
+                onClick={onDownloadRevision}
+                disabled={!revisionText}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

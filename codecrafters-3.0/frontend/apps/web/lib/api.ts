@@ -165,6 +165,25 @@ export async function generateDocumentSummary(
   return handleResponse<{ summary: string }>(res)
 }
 
+export interface RevisionResult {
+  revision: string
+  generatedAt: string
+  documentCount: number
+  fileName: string
+}
+
+export async function generateConversationRevision(
+  token: string,
+  conversationId: string
+): Promise<RevisionResult> {
+  const res = await fetch(`${BACKEND}/api/documents/revision`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ conversationId }),
+  })
+  return handleResponse<RevisionResult>(res)
+}
+
 export async function deleteDocument(token: string, id: string): Promise<void> {
   const res = await fetch(`${BACKEND}/api/documents/${id}`, {
     method: "DELETE",

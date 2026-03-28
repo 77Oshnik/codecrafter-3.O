@@ -4,7 +4,11 @@ const pdfParse = require("pdf-parse");
 const { protect } = require("../middleware/auth");
 const Document = require("../models/document");
 const { uploadPDF, deletePDF } = require("../services/cloudinaryService");
-const { getEmbedding, generateSummary } = require("../services/geminiService");
+const {
+  getEmbedding,
+  generateSummary,
+  generateRevisionNotes,
+} = require("../services/geminiService");
 const { upsertVectors, deleteVectors } = require("../services/qdrantService");
 
 const router = express.Router();
@@ -274,6 +278,48 @@ router.post("/:id/summary", protect, async (req, res) => {
   } catch (err) {
     console.error("[documents/summary]", err);
     return res.status(500).json({ error: err.message || "Failed to generate summary." });
+  }
+});
+
+// POST /api/documents/revision — generate revision notes for all docs in a conversation
+router.post("/revision", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.body;
+
+    if (!conversationId) {
+      return res.status(400).json({ error: "conversationId is required." });
+    }
+
+    const docs = await Document.find({
+      userId: req.user.id,
+      conversationId,
+      status: "ready",
+    }).select("name summary");
+
+    if (docs.length === 0) {
+      return res.status(404).json({ error: "No ready documents found for this chat." });
+    }
+
+    const revision = await generateRevisionNotes(
+      docs.map((doc) => ({
+        name: doc.name,
+        summary: doc.summary || "",
+      }))
+    );
+
+    const generatedAt = new Date().toISOString();
+    const safeConversationId = String(conversationId).slice(-8);
+    const fileName = `revision-${safeConversationId}-${generatedAt.slice(0, 10)}.md`;
+
+    return res.json({
+      revision,
+      generatedAt,
+      documentCount: docs.length,
+      fileName,
+    });
+  } catch (err) {
+    console.error("[documents/revision]", err);
+    return res.status(500).json({ error: err.message || "Failed to generate revision notes." });
   }
 });
 
