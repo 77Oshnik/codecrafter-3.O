@@ -1,9 +1,20 @@
-import NextAuth, { type NextAuthConfig } from "next-auth"
+import NextAuth, { type NextAuthConfig, type NextAuthResult } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:5001"
+const BACKEND_URL =
+  process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5001"
+
+const AUTH_SECRET =
+  process.env.AUTH_SECRET ??
+  process.env.NEXTAUTH_SECRET ??
+  (process.env.NODE_ENV === "development" ? "dev-auth-secret-change-me" : undefined)
+
+if (!AUTH_SECRET) {
+  throw new Error("Missing AUTH_SECRET or NEXTAUTH_SECRET for NextAuth")
+}
 
 const authConfig = {
+  secret: AUTH_SECRET,
   trustHost: true,
   providers: [
     CredentialsProvider({
@@ -65,9 +76,6 @@ const authConfig = {
   },
 } satisfies NextAuthConfig
 
-const nextAuth = NextAuth(authConfig)
+const nextAuth: NextAuthResult = NextAuth(authConfig)
 
-export const handlers = nextAuth.handlers
-export const auth = nextAuth.auth
-export const signIn = nextAuth.signIn
-export const signOut = nextAuth.signOut
+export const { handlers, auth, signIn, signOut } = nextAuth

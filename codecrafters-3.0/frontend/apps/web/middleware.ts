@@ -1,13 +1,12 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
-import type { NextMiddleware } from "next/server"
 
 const protectedRoutes = ["/dashboard"]
 const authRoutes = ["/login", "/signup", "/verify-email"]
 
-const middleware: NextMiddleware = auth((req) => {
+export default auth((req) => {
   const { nextUrl, auth: session } = req
-  const isLoggedIn = !!session?.user
+  const isLoggedIn = !!session
 
   const isProtected = protectedRoutes.some((route) => nextUrl.pathname.startsWith(route))
   const isAuthRoute = authRoutes.some((route) => nextUrl.pathname.startsWith(route))
@@ -22,8 +21,6 @@ const middleware: NextMiddleware = auth((req) => {
 
   return NextResponse.next()
 })
-
-export default middleware
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],

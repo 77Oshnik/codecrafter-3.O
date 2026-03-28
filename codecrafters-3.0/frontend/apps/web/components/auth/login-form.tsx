@@ -26,14 +26,13 @@ export function LoginForm() {
       redirect: false,
     })
 
-    if (result?.error) {
+    if (!result || result.error || !result.ok) {
       setError("Invalid credentials or email not verified yet. Please verify your email first.")
       setLoading(false)
       return
     }
 
-    router.push("/dashboard")
-    router.refresh()
+    window.location.href = "/dashboard"
   }
 
   return (
