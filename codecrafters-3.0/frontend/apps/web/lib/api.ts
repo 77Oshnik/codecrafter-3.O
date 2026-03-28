@@ -102,11 +102,14 @@ export interface StudyResourceItem {
 
 export interface StudyResultItem {
   id: string
-  quizId: string
-  quizTitle: string
-  score: number
-  total: number
-  percentage: number
+  type: "quiz" | "flashcards"
+  title: string
+  quizId?: string
+  flashcardsId?: string
+  score?: number
+  total?: number
+  percentage?: number
+  cardCount?: number
   createdAt: string
 }
 
@@ -420,6 +423,26 @@ export async function createStudyResource(
     body: JSON.stringify(payload),
   })
   return handleResponse<{ resource: StudyResourceItem }>(res)
+}
+
+export async function deleteStudyResource(token: string, resourceId: string): Promise<void> {
+  const res = await fetch(`${BACKEND}/api/study/resource/${resourceId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<void>(res)
+}
+
+export async function deleteStudyResult(
+  token: string,
+  type: StudyResultItem["type"],
+  resultId: string
+): Promise<void> {
+  const res = await fetch(`${BACKEND}/api/study/result/${type}/${resultId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<void>(res)
 }
 
 // ---------------------------------------------------------------------------

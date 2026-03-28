@@ -12,6 +12,7 @@ import {
   Loader2,
   PlayCircle,
   RefreshCcw,
+  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react"
@@ -33,6 +34,8 @@ interface Props {
   resources?: StudyResourceItem[]
   results?: StudyResultItem[]
   onOpenResource?: (type: StudyResourceItem["type"], resourceRefId: string) => void
+  onDeleteResource?: (resourceId: string) => void
+  onDeleteResult?: (type: StudyResultItem["type"], resultId: string) => void
   canGenerateRevision?: boolean
   generatingRevision?: boolean
   revisionText?: string
@@ -102,6 +105,8 @@ export function StudyToolsPanel({
   resources = [],
   results = [],
   onOpenResource,
+  onDeleteResource,
+  onDeleteResult,
 }: Props) {  const isSidebar = variant === "sidebar"
   const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false)
 
@@ -176,22 +181,53 @@ export function StudyToolsPanel({
                 <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Results</h4>
                 {results.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
-                    No quiz attempts yet.
+                    No results yet.
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {results.slice(0, 8).map((item) => (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        onClick={() => item.quizId && onOpenResource?.("quiz", item.quizId)}
-                        className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left transition-colors hover:bg-accent/40"
+                        className="group w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left"
                       >
-                        <p className="line-clamp-1 text-xs font-medium">{item.quizTitle}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Score: {item.score}/{item.total} ({item.percentage}%)
-                        </p>
-                      </button>
+                        <div className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.type === "quiz" && item.quizId) {
+                                onOpenResource?.("quiz", item.quizId)
+                              }
+                              if (item.type === "flashcards" && item.flashcardsId) {
+                                onOpenResource?.("flashcards", item.flashcardsId)
+                              }
+                            }}
+                            className="flex-1 rounded text-left transition-colors hover:text-primary"
+                          >
+                            <p className="line-clamp-1 text-xs font-medium">{item.title}</p>
+                            {item.type === "quiz" ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                Score: {item.score}/{item.total} ({item.percentage}%)
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground">
+                                Flashcards: {item.cardCount ?? 0} cards
+                              </p>
+                            )}
+                          </button>
+
+                          {onDeleteResult && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteResult(item.type, item.id)}
+                              className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+                              title="Delete result"
+                              aria-label="Delete result"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -206,26 +242,44 @@ export function StudyToolsPanel({
                 ) : (
                   <div className="space-y-2">
                     {resources.slice(0, 10).map((item) => (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        onClick={() => {
-                          if (
-                            (item.type === "quiz" || item.type === "flashcards" || item.type === "flowchart") &&
-                            item.resourceRefId
-                          ) {
-                            onOpenResource?.(item.type, item.resourceRefId)
-                          }
-                        }}
-                        className={`w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left transition-colors ${
-                          item.type === "quiz" || item.type === "flashcards" || item.type === "flowchart"
-                            ? "hover:bg-accent/40"
-                            : "cursor-default"
-                        }`}
+                        className="group w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-left"
                       >
-                        <p className="line-clamp-1 text-xs font-medium">{item.title}</p>
-                        <p className="text-[11px] capitalize text-muted-foreground">{item.type}</p>
-                      </button>
+                        <div className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                (item.type === "quiz" || item.type === "flashcards" || item.type === "flowchart") &&
+                                item.resourceRefId
+                              ) {
+                                onOpenResource?.(item.type, item.resourceRefId)
+                              }
+                            }}
+                            className={`flex-1 rounded text-left transition-colors ${
+                              item.type === "quiz" || item.type === "flashcards" || item.type === "flowchart"
+                                ? "hover:text-primary"
+                                : "cursor-default"
+                            }`}
+                          >
+                            <p className="line-clamp-1 text-xs font-medium">{item.title}</p>
+                            <p className="text-[11px] capitalize text-muted-foreground">{item.type}</p>
+                          </button>
+
+                          {onDeleteResource && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteResource(item.id)}
+                              className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+                              title="Delete resource"
+                              aria-label="Delete resource"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}

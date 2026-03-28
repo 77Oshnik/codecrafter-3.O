@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageSquare, Plus, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, MessageSquare, Plus, Trash2 } from "lucide-react"
 import type { Conversation } from "@/lib/api"
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   onSelectConversation: (id: string) => void
   onNewConversation: () => void
   onDeleteConversation: (id: string) => void
+  collapsed: boolean
+  onToggleCollapse: () => void
 }
 
 export function ConversationSidebar({
@@ -17,19 +19,35 @@ export function ConversationSidebar({
   onSelectConversation,
   onNewConversation,
   onDeleteConversation,
+  collapsed,
+  onToggleCollapse,
 }: Props) {
   return (
-    <aside className="flex flex-col w-60 min-w-[240px] h-full bg-muted/40 border-r border-border">
+    <aside
+      className={`flex h-full flex-col border-r border-border bg-muted/40 transition-[width] duration-300 ease-in-out ${
+        collapsed ? "w-16 min-w-16" : "w-60 min-w-60"
+      }`}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <span className="font-semibold text-sm">Chats</span>
-        <button
-          onClick={onNewConversation}
-          className="p-1.5 rounded-md hover:bg-accent transition-colors"
-          title="New conversation"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+      <div className={`flex items-center border-b border-border py-3 ${collapsed ? "justify-center px-2" : "justify-between px-4"}`}>
+        {!collapsed && <span className="text-sm font-semibold">Chats</span>}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onNewConversation}
+            className="rounded-md p-1.5 transition-colors hover:bg-accent"
+            title="New conversation"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onToggleCollapse}
+            className="rounded-md p-1.5 transition-colors hover:bg-accent"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       {/* Conversation list */}
@@ -42,23 +60,27 @@ export function ConversationSidebar({
           conversations.map((c) => (
             <div
               key={c._id}
-              className={`group flex items-center gap-2 px-3 py-2 mx-2 rounded-md cursor-pointer transition-colors ${
+              className={`group mx-2 flex cursor-pointer items-center rounded-md py-2 transition-colors ${
                 activeConversationId === c._id
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-accent/50"
-              }`}
+              } ${collapsed ? "justify-center px-2" : "gap-2 px-3"}`}
               onClick={() => onSelectConversation(c._id)}
+              title={collapsed ? c.title : undefined}
             >
-              <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-xs truncate">{c.title}</span>
+              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              {!collapsed && <span className="flex-1 truncate text-xs">{c.title}</span>}
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   onDeleteConversation(c._id)
                 }}
-                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-destructive transition-all"
+                className={`rounded p-0.5 transition-all hover:text-destructive ${
+                  collapsed ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                title="Delete conversation"
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="h-3 w-3" />
               </button>
             </div>
           ))

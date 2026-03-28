@@ -238,13 +238,17 @@ router.delete("/:id", protect, async (req, res) => {
       return res.status(404).json({ error: "Document not found." });
     }
 
-    // Delete vectors from Qdrant
+    // Delete vectors from Qdrant (best-effort)
     if (doc.vectorIds && doc.vectorIds.length > 0) {
-      await deleteVectors(doc.vectorIds, req.user.id);
+      await deleteVectors(doc.vectorIds, req.user.id).catch((err) => {
+        console.warn("[documents/delete] Failed to delete vectors:", err.message);
+      });
     }
 
-    // Delete file from Cloudinary
-    await deletePDF(doc.cloudinaryPublicId);
+    // Delete file from Cloudinary (best-effort)
+    await deletePDF(doc.cloudinaryPublicId).catch((err) => {
+      console.warn("[documents/delete] Failed to delete cloud file:", err.message);
+    });
 
     // Delete from MongoDB
     await Document.deleteOne({ _id: doc._id });

@@ -54,6 +54,71 @@ router.post("/resource", protect, async (req, res) => {
   }
 });
 
+// DELETE /api/study/resource/:id
+router.delete("/resource/:id", protect, async (req, res) => {
+  try {
+    const resource = await StudyResource.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!resource) {
+      return res.status(404).json({ error: "Study resource not found." });
+    }
+
+    if (resource.type === "quiz" && resource.resourceRefId) {
+      await Quiz.deleteOne({ _id: resource.resourceRefId, userId: req.user.id }).catch(() => {});
+      await QuizResult.deleteMany({ quizId: resource.resourceRefId, userId: req.user.id }).catch(() => {});
+    }
+
+    if (resource.type === "flashcards" && resource.resourceRefId) {
+      await FlashcardSet.deleteOne({ _id: resource.resourceRefId, userId: req.user.id }).catch(() => {});
+    }
+
+    if (resource.type === "flowchart" && resource.resourceRefId) {
+      await FlowchartSet.deleteOne({ _id: resource.resourceRefId, userId: req.user.id }).catch(() => {});
+    }
+
+    await StudyResource.deleteOne({ _id: resource._id, userId: req.user.id });
+    return res.json({ message: "Study resource deleted." });
+  } catch (err) {
+    console.error("[study/resource/delete]", err);
+    return res.status(500).json({ error: "Failed to delete study resource." });
+  }
+});
+
+// DELETE /api/study/result/:type/:id
+router.delete("/result/:type/:id", protect, async (req, res) => {
+  try {
+    const { type, id } = req.params;
+
+    if (type === "quiz") {
+      const result = await QuizResult.findOne({ _id: id, userId: req.user.id });
+      if (!result) {
+        return res.status(404).json({ error: "Quiz result not found." });
+      }
+      await QuizResult.deleteOne({ _id: result._id, userId: req.user.id });
+      return res.json({ message: "Quiz result deleted." });
+    }
+
+    if (type === "flashcards") {
+      const set = await FlashcardSet.findOne({ _id: id, userId: req.user.id });
+      if (!set) {
+        return res.status(404).json({ error: "Flashcards result not found." });
+      }
+      await FlashcardSet.deleteOne({ _id: set._id, userId: req.user.id });
+      await StudyResource.deleteMany({
+        userId: req.user.id,
+        conversationId: set.conversationId,
+        type: "flashcards",
+        resourceRefId: set._id.toString(),
+      }).catch(() => {});
+      return res.json({ message: "Flashcards result deleted." });
+    }
+
+    return res.status(400).json({ error: "Unsupported result type." });
+  } catch (err) {
+    console.error("[study/result/delete]", err);
+    return res.status(500).json({ error: "Failed to delete result." });
+  }
+});
+
 async function buildStudyContext({ userId, conversationId, intentPrompt }) {
   const queryEmbedding = await getEmbedding(intentPrompt);
 
@@ -525,22 +590,53 @@ router.get("/sidebar", protect, async (req, res) => {
       return res.status(400).json({ error: "conversationId is required." });
     }
 
-    const resources = await StudyResource.find({
-      userId: req.user.id,
-      conversationId,
-    })
-      .select("type title description resourceRefId createdAt")
-      .sort({ createdAt: -1 })
-      .limit(30);
+    const [resources, quizResults, flashcardSets] = await Promise.all([
+      StudyResource.find({
+        userId: req.user.id,
+        conversationId,
+      })
+        .select("type title description resourceRefId createdAt")
+        .sort({ createdAt: -1 })
+        .limit(30),
+      QuizResult.find({
+        userId: req.user.id,
+        conversationId,
+      })
+        .populate({ path: "quizId", select: "title" })
+        .select("quizId score total percentage createdAt")
+        .sort({ createdAt: -1 })
+        .limit(30),
+      FlashcardSet.find({
+        userId: req.user.id,
+        conversationId,
+      })
+        .select("title cards createdAt")
+        .sort({ createdAt: -1 })
+        .limit(30),
+    ]);
 
-    const results = await QuizResult.find({
-      userId: req.user.id,
-      conversationId,
-    })
-      .populate({ path: "quizId", select: "title" })
-      .select("quizId score total percentage createdAt")
-      .sort({ createdAt: -1 })
-      .limit(30);
+    const mergedResults = [
+      ...quizResults.map((r) => ({
+        id: r._id,
+        type: "quiz",
+        quizId: r.quizId?._id,
+        title: r.quizId?.title || "Quiz",
+        score: r.score,
+        total: r.total,
+        percentage: r.percentage,
+        createdAt: r.createdAt,
+      })),
+      ...flashcardSets.map((set) => ({
+        id: set._id,
+        type: "flashcards",
+        flashcardsId: set._id,
+        title: set.title,
+        cardCount: Array.isArray(set.cards) ? set.cards.length : 0,
+        createdAt: set.createdAt,
+      })),
+    ]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 30);
 
     return res.json({
       resources: resources.map((r) => ({
@@ -551,15 +647,7 @@ router.get("/sidebar", protect, async (req, res) => {
         resourceRefId: r.resourceRefId,
         createdAt: r.createdAt,
       })),
-      results: results.map((r) => ({
-        id: r._id,
-        quizId: r.quizId?._id,
-        quizTitle: r.quizId?.title || "Quiz",
-        score: r.score,
-        total: r.total,
-        percentage: r.percentage,
-        createdAt: r.createdAt,
-      })),
+      results: mergedResults,
     });
   } catch (err) {
     console.error("[study/sidebar]", err);

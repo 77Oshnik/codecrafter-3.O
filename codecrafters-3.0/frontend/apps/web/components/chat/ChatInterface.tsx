@@ -38,6 +38,8 @@ import {
   submitQuiz,
   listStudySidebarData,
   createStudyResource,
+  deleteStudyResource,
+  deleteStudyResult,
   generateFlashcards,
   getFlashcardsById,
   generateFlowchart,
@@ -72,6 +74,12 @@ function buildRevisionBullets(text: string): string[] {
     .slice(0, 8)
 }
 
+interface PendingDeleteAction {
+  kind: string
+  itemName: string
+  onConfirm: () => Promise<void>
+}
+
 export function ChatInterface() {
   const { data: session } = useSession()
   const router = useRouter()
@@ -83,6 +91,7 @@ export function ChatInterface() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [studyResources, setStudyResources] = useState<StudyResourceItem[]>([])
   const [studyResults, setStudyResults] = useState<StudyResultItem[]>([])
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null)
   const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null)
   const [quizModalOpen, setQuizModalOpen] = useState(false)
@@ -103,6 +112,8 @@ export function ChatInterface() {
   const [generatingRevision, setGeneratingRevision] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<PendingDeleteAction | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -195,7 +206,7 @@ export function ChatInterface() {
     [stopPolling]
   )
 
-  const handleDeleteConversation = useCallback(
+  const executeDeleteConversation = useCallback(
     async (id: string) => {
       if (!token) return
       try {
@@ -212,6 +223,24 @@ export function ChatInterface() {
       }
     },
     [token, activeId, stopPolling]
+  )
+
+  const requestDelete = useCallback(
+    (kind: string, itemName: string, onConfirm: () => Promise<void>) => {
+      setPendingDelete({ kind, itemName, onConfirm })
+    },
+    []
+  )
+
+  const handleDeleteConversation = useCallback(
+    (id: string) => {
+      const conversation = conversations.find((c) => c._id === id)
+      const itemName = conversation?.title || "this conversation"
+      requestDelete("conversation", itemName, async () => {
+        await executeDeleteConversation(id)
+      })
+    },
+    [conversations, requestDelete, executeDeleteConversation]
   )
 
   const handleSendMessage = useCallback(
@@ -287,7 +316,7 @@ export function ChatInterface() {
     [token, uploading, activeId, pollDocumentStatus]
   )
 
-  const handleDeleteDocument = useCallback(
+  const executeDeleteDocument = useCallback(
     async (id: string) => {
       if (!token) return
       try {
@@ -299,6 +328,82 @@ export function ChatInterface() {
     },
     [token]
   )
+
+  const handleDeleteDocument = useCallback(
+    (id: string, docName: string) => {
+      requestDelete("document", docName || "this document", async () => {
+        await executeDeleteDocument(id)
+      })
+    },
+    [requestDelete, executeDeleteDocument]
+  )
+
+  const executeDeleteStudyResource = useCallback(
+    async (resourceId: string) => {
+      if (!token) return
+      setError(null)
+      try {
+        await deleteStudyResource(token, resourceId)
+        setStudyResources((prev) => prev.filter((resource) => resource.id !== resourceId))
+        if (activeId) {
+          await refreshStudySidebar(activeId)
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [token, activeId, refreshStudySidebar]
+  )
+
+  const handleDeleteStudyResource = useCallback(
+    (resourceId: string) => {
+      const resource = studyResources.find((item) => item.id === resourceId)
+      const itemName = resource?.title || "this resource"
+      requestDelete("study resource", itemName, async () => {
+        await executeDeleteStudyResource(resourceId)
+      })
+    },
+    [studyResources, requestDelete, executeDeleteStudyResource]
+  )
+
+  const executeDeleteStudyResult = useCallback(
+    async (type: StudyResultItem["type"], resultId: string) => {
+      if (!token) return
+      setError(null)
+      try {
+        await deleteStudyResult(token, type, resultId)
+        setStudyResults((prev) => prev.filter((result) => result.id !== resultId))
+        if (activeId) {
+          await refreshStudySidebar(activeId)
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [token, activeId, refreshStudySidebar]
+  )
+
+  const handleDeleteStudyResult = useCallback(
+    (type: StudyResultItem["type"], resultId: string) => {
+      const result = studyResults.find((item) => item.id === resultId)
+      const itemName = result?.title || "this result"
+      requestDelete(type, itemName, async () => {
+        await executeDeleteStudyResult(type, resultId)
+      })
+    },
+    [studyResults, requestDelete, executeDeleteStudyResult]
+  )
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDelete || isDeleting) return
+    setIsDeleting(true)
+    try {
+      await pendingDelete.onConfirm()
+      setPendingDelete(null)
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [pendingDelete, isDeleting])
 
   const handleGenerateSummary = useCallback(
     async (docId: string) => {
@@ -603,6 +708,8 @@ export function ChatInterface() {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
+        collapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
       <main className="flex h-full min-w-0 flex-1">
@@ -707,7 +814,7 @@ export function ChatInterface() {
                         <button
                           onClick={() => {
                             if (isOpen) setExpandedDocId(null)
-                            handleDeleteDocument(docId)
+                            handleDeleteDocument(docId, doc.name)
                           }}
                           className="shrink-0 rounded p-0.5 transition-colors hover:text-destructive"
                           title="Remove document"
@@ -752,6 +859,12 @@ export function ChatInterface() {
             results={studyResults}
             onOpenResource={(type, resourceRefId) => {
               void openStudyResource(type, resourceRefId)
+            }}
+            onDeleteResource={(resourceId) => {
+              void handleDeleteStudyResource(resourceId)
+            }}
+            onDeleteResult={(type, resultId) => {
+              void handleDeleteStudyResult(type, resultId)
             }}
           />
         </aside>
@@ -803,6 +916,40 @@ export function ChatInterface() {
           void handleGenerateFlowchartFromPreference(fullPrompt)
         }}
       />
+
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-background shadow-2xl">
+            <div className="border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold text-destructive">Delete {pendingDelete.kind}?</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                You are deleting <span className="font-medium text-foreground">“{pendingDelete.itemName}”</span>.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={isDeleting}
+                className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleConfirmDelete()
+                }}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1 rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
