@@ -100,4 +100,191 @@ ${text.slice(0, 12000)}`;
   return result.response.text();
 }
 
-module.exports = { getEmbedding, generateChatResponse, generateSummary };
+function extractJsonBlock(text) {
+  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
+  if (fenced && fenced[1]) return fenced[1].trim();
+
+  const braceStart = text.indexOf("{");
+  const braceEnd = text.lastIndexOf("}");
+  if (braceStart >= 0 && braceEnd > braceStart) {
+    return text.slice(braceStart, braceEnd + 1).trim();
+  }
+
+  return text.trim();
+}
+
+function shuffleQuestionOptions(question) {
+  const zipped = question.options.map((option, idx) => ({
+    option,
+    reason: question.optionReasons[idx],
+    isCorrect: idx === question.correctOptionIndex,
+  }));
+
+  for (let i = zipped.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [zipped[i], zipped[j]] = [zipped[j], zipped[i]];
+  }
+
+  const newCorrectOptionIndex = zipped.findIndex((item) => item.isCorrect);
+
+  return {
+    ...question,
+    options: zipped.map((item) => item.option),
+    optionReasons: zipped.map((item) => item.reason),
+    correctOptionIndex: newCorrectOptionIndex,
+  };
+}
+
+/**
+ * Generate a 15-question MCQ quiz from provided document context.
+ * @param {string} context
+ * @returns {Promise<{title: string, questions: Array<{question: string, options: string[], correctOptionIndex: number, optionReasons: string[]}>}>}
+ */
+async function generateQuizFromContext(context) {
+  const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+  const prompt = `You are creating a strict MCQ quiz from the provided document context only.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "title": "string",
+  "questions": [
+    {
+      "question": "string",
+      "options": ["string", "string", "string", "string"],
+      "correctOptionIndex": 0,
+      "optionReasons": ["one sentence", "one sentence", "one sentence", "one sentence"]
+    }
+  ]
+}
+
+Rules:
+- Exactly 15 questions.
+- Exactly 4 options per question.
+- Only one correct option.
+- correctOptionIndex must be 0, 1, 2, or 3.
+- optionReasons must have 4 one-sentence explanations aligned with each option.
+- The reason for the correct option should explain why it is correct.
+- The reasons for incorrect options should explain why they are wrong.
+- Do not include markdown, comments, or extra keys.
+- Base every question strictly on the context below.
+
+Context:
+${context.slice(0, 40000)}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(extractJsonBlock(text));
+  } catch (error) {
+    throw new Error("Failed to parse quiz JSON from Gemini response.");
+  }
+
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.questions)) {
+    throw new Error("Quiz payload is malformed.");
+  }
+
+  if (parsed.questions.length !== 15) {
+    throw new Error(`Quiz must contain exactly 15 questions, got ${parsed.questions.length}.`);
+  }
+
+  parsed.questions.forEach((q, index) => {
+    if (!q || typeof q.question !== "string") {
+      throw new Error(`Question ${index + 1} is missing text.`);
+    }
+    if (!Array.isArray(q.options) || q.options.length !== 4) {
+      throw new Error(`Question ${index + 1} must have exactly 4 options.`);
+    }
+    if (![0, 1, 2, 3].includes(q.correctOptionIndex)) {
+      throw new Error(`Question ${index + 1} has invalid correctOptionIndex.`);
+    }
+    if (!Array.isArray(q.optionReasons) || q.optionReasons.length !== 4) {
+      throw new Error(`Question ${index + 1} must have exactly 4 optionReasons.`);
+    }
+  });
+
+  const shuffledQuestions = parsed.questions.map((q) => shuffleQuestionOptions(q));
+
+  return {
+    title: typeof parsed.title === "string" && parsed.title.trim()
+      ? parsed.title.trim()
+      : "Document Quiz",
+    questions: shuffledQuestions,
+  };
+}
+
+/**
+ * Generate a flashcard set from provided document context.
+ * @param {string} context
+ * @returns {Promise<{title: string, cards: Array<{question: string, answer: string}>}>}
+ */
+async function generateFlashcardsFromContext(context) {
+  const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+  const prompt = `You are creating flashcards from the provided document context only.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "title": "string",
+  "cards": [
+    {
+      "question": "string",
+      "answer": "string"
+    }
+  ]
+}
+
+Rules:
+- Generate exactly 15 flashcards.
+- Keep question concise and factual.
+- Keep answer clear, accurate, and short (1-3 sentences max).
+- No markdown, no comments, no extra keys.
+- Base all content strictly on the context below.
+
+Context:
+${context.slice(0, 40000)}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(extractJsonBlock(text));
+  } catch (_error) {
+    throw new Error("Failed to parse flashcards JSON from Gemini response.");
+  }
+
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.cards)) {
+    throw new Error("Flashcards payload is malformed.");
+  }
+
+  if (parsed.cards.length !== 15) {
+    throw new Error(`Flashcards must contain exactly 15 cards, got ${parsed.cards.length}.`);
+  }
+
+  parsed.cards.forEach((card, index) => {
+    if (!card || typeof card.question !== "string" || !card.question.trim()) {
+      throw new Error(`Flashcard ${index + 1} is missing question.`);
+    }
+    if (!card || typeof card.answer !== "string" || !card.answer.trim()) {
+      throw new Error(`Flashcard ${index + 1} is missing answer.`);
+    }
+  });
+
+  return {
+    title: typeof parsed.title === "string" && parsed.title.trim()
+      ? parsed.title.trim()
+      : "Document Flashcards",
+    cards: parsed.cards,
+  };
+}
+
+module.exports = {
+  getEmbedding,
+  generateChatResponse,
+  generateSummary,
+  generateQuizFromContext,
+  generateFlashcardsFromContext,
+};

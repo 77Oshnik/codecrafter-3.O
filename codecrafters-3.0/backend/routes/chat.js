@@ -2,6 +2,10 @@ const express = require("express");
 const { protect } = require("../middleware/auth");
 const Conversation = require("../models/conversation");
 const Document = require("../models/document");
+const Quiz = require("../models/quiz");
+const QuizResult = require("../models/quizResult");
+const StudyResource = require("../models/studyResource");
+const FlashcardSet = require("../models/flashcardSet");
 const { getEmbedding, generateChatResponse } = require("../services/geminiService");
 const { queryVectors, deleteVectors } = require("../services/qdrantService");
 const { deletePDF } = require("../services/cloudinaryService");
@@ -77,6 +81,10 @@ router.delete("/:id", protect, async (req, res) => {
       await deletePDF(doc.cloudinaryPublicId).catch(() => {});
     }
     await Document.deleteMany({ conversationId: req.params.id });
+    await Quiz.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
+    await FlashcardSet.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
+    await QuizResult.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
+    await StudyResource.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
 
     return res.json({ message: "Conversation deleted." });
   } catch (err) {
