@@ -1,10 +1,11 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
+import type { NextMiddleware } from "next/server"
 
 const protectedRoutes = ["/dashboard"]
 const authRoutes = ["/login", "/signup", "/verify-email"]
 
-export default auth((req) => {
+const middleware: NextMiddleware = auth((req) => {
   const { nextUrl, auth: session } = req
   const isLoggedIn = !!session?.user
 
@@ -21,6 +22,8 @@ export default auth((req) => {
 
   return NextResponse.next()
 })
+
+export default middleware
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
