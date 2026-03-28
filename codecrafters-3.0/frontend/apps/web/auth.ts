@@ -29,7 +29,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const user = await res.json()
-        return { id: user.id, name: user.name, email: user.email }
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          backendToken: user.token,
+        }
       },
     }),
   ],
@@ -40,12 +45,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) token.id = user.id
+      if (user) {
+        token.id = user.id
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        token.backendToken = (user as any).backendToken
+      }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(session.user as any).backendToken = token.backendToken as string
       }
       return session
     },

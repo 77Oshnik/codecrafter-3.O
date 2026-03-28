@@ -1,5 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const OTP = require("../models/otp");
 const { sendVerificationEmail } = require("../lib/email");
@@ -158,10 +159,17 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials." });
     }
 
+    const token = jwt.sign(
+      { id: user._id.toString(), email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
     return res.json({
       id: user._id.toString(),
       name: user.name,
       email: user.email,
+      token,
     });
   } catch (err) {
     console.error("[login]", err);
