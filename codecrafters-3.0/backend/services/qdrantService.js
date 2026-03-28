@@ -126,9 +126,10 @@ async function upsertVectors(vectors, namespace) {
  * @param {string} userId
  * @param {number} topK
  * @param {string|null} conversationId - Restrict search to documents in this conversation
+ * @param {Array<object>} extraMust - Additional Qdrant `must` filters
  * @returns {Promise<Array>}
  */
-async function queryVectors(queryVector, userId, topK = 5, conversationId = null) {
+async function queryVectors(queryVector, userId, topK = 5, conversationId = null, extraMust = []) {
   const client = getClient();
 
   try {
@@ -142,6 +143,10 @@ async function queryVectors(queryVector, userId, topK = 5, conversationId = null
 
     if (conversationId) {
       mustFilters.push({ key: "conversationId", match: { value: String(conversationId) } });
+    }
+
+    if (Array.isArray(extraMust) && extraMust.length > 0) {
+      mustFilters.push(...extraMust);
     }
 
     const result = await client.search(collectionName, {

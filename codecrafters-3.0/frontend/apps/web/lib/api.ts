@@ -102,6 +102,19 @@ export interface StudyResultItem {
   createdAt: string
 }
 
+export interface YouTubeVideoItem {
+  id: string
+  conversationId: string
+  url: string
+  videoId: string
+  title: string
+  status: "processing" | "ready" | "failed"
+  chunkCount: number
+  summary?: string
+  notes?: string
+  createdAt: string
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -179,12 +192,13 @@ export interface SendMessageResult {
 export async function sendMessage(
   token: string,
   conversationId: string,
-  message: string
+  message: string,
+  options?: { videoId?: string }
 ): Promise<SendMessageResult> {
   const res = await fetch(`${BACKEND}/api/chat/${conversationId}/message`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, videoId: options?.videoId }),
   })
   return handleResponse<SendMessageResult>(res)
 }
@@ -375,4 +389,59 @@ export async function createStudyResource(
     body: JSON.stringify(payload),
   })
   return handleResponse<{ resource: StudyResourceItem }>(res)
+}
+
+// ---------------------------------------------------------------------------
+// YouTube learning
+// ---------------------------------------------------------------------------
+export async function ingestYouTubeVideo(
+  token: string,
+  payload: { conversationId: string; url: string }
+): Promise<{ video: YouTubeVideoItem }> {
+  const res = await fetch(`${BACKEND}/api/youtube/ingest`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  })
+  return handleResponse<{ video: YouTubeVideoItem }>(res)
+}
+
+export async function listYouTubeVideos(
+  token: string,
+  conversationId: string
+): Promise<YouTubeVideoItem[]> {
+  const res = await fetch(`${BACKEND}/api/youtube?conversationId=${conversationId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<YouTubeVideoItem[]>(res)
+}
+
+export async function generateYouTubeSummary(
+  token: string,
+  id: string
+): Promise<{ summary: string }> {
+  const res = await fetch(`${BACKEND}/api/youtube/${id}/summary`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ summary: string }>(res)
+}
+
+export async function generateYouTubeNotes(
+  token: string,
+  id: string
+): Promise<{ notes: string }> {
+  const res = await fetch(`${BACKEND}/api/youtube/${id}/notes`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ notes: string }>(res)
+}
+
+export async function deleteYouTubeVideo(token: string, id: string): Promise<void> {
+  const res = await fetch(`${BACKEND}/api/youtube/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<void>(res)
 }

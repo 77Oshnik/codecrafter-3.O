@@ -8,6 +8,7 @@ const authRoutes = require("./routes/auth");
 const chatRoutes = require("./routes/chat");
 const documentRoutes = require("./routes/documents");
 const studyRoutes = require("./routes/study");
+const youtubeRoutes = require("./routes/youtube");
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/study", studyRoutes);
+app.use("/api/youtube", youtubeRoutes);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

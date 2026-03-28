@@ -6,6 +6,7 @@ const Quiz = require("../models/quiz");
 const QuizResult = require("../models/quizResult");
 const StudyResource = require("../models/studyResource");
 const FlashcardSet = require("../models/flashcardSet");
+const YouTubeVideo = require("../models/youtubeVideo");
 const { getEmbedding, generateChatResponse } = require("../services/geminiService");
 const { queryVectors, deleteVectors } = require("../services/qdrantService");
 const { deletePDF } = require("../services/cloudinaryService");
@@ -86,6 +87,14 @@ router.delete("/:id", protect, async (req, res) => {
     await QuizResult.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
     await StudyResource.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
 
+    const videos = await YouTubeVideo.find({ conversationId: req.params.id, userId: req.user.id });
+    for (const video of videos) {
+      if (video.vectorIds?.length > 0) {
+        await deleteVectors(video.vectorIds, req.user.id).catch(() => {});
+      }
+    }
+    await YouTubeVideo.deleteMany({ conversationId: req.params.id, userId: req.user.id }).catch(() => {});
+
     return res.json({ message: "Conversation deleted." });
   } catch (err) {
     console.error("[chat/delete]", err);
@@ -121,7 +130,7 @@ router.patch("/:id/title", protect, async (req, res) => {
 // POST /api/chat/:id/message — send a message and get RAG-augmented response
 router.post("/:id/message", protect, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, videoId } = req.body;
 
     if (!message?.trim()) {
       return res.status(400).json({ error: "Message is required." });
@@ -159,11 +168,31 @@ router.post("/:id/message", protect, async (req, res) => {
     // 3. RAG: embed the user query and retrieve similar chunks
     let context = "";
     let sources = [];
-    const hasDocuments =
-      (await Document.countDocuments({ conversationId: conversation._id, status: "ready" })) > 0;
+    const sourceFilter = videoId
+      ? [
+          { key: "sourceType", match: { value: "youtube" } },
+          { key: "videoId", match: { value: String(videoId) } },
+        ]
+      : [];
+
+    const hasSources = videoId
+      ? (await YouTubeVideo.countDocuments({
+          conversationId: conversation._id,
+          userId,
+          videoId: String(videoId),
+          status: "ready",
+        })) > 0
+      : (await Document.countDocuments({ conversationId: conversation._id, status: "ready" })) > 0;
+
     try {
       const queryEmbedding = await getEmbedding(message.trim());
-      const matches = await queryVectors(queryEmbedding, userId, 5, conversation._id.toString());
+      const matches = await queryVectors(
+        queryEmbedding,
+        userId,
+        6,
+        conversation._id.toString(),
+        sourceFilter
+      );
 
       // Primary: high-confidence matches (>0.65).
       // Fallback: if no high-confidence match but documents exist (e.g. meta queries like
@@ -172,7 +201,7 @@ router.post("/:id/message", protect, async (req, res) => {
       const relevant =
         highRelevant.length > 0
           ? highRelevant
-          : hasDocuments
+          : hasSources
             ? matches.filter((m) => m.score > 0.4).slice(0, 3)
             : [];
       if (relevant.length > 0) {
@@ -188,14 +217,14 @@ router.post("/:id/message", protect, async (req, res) => {
           text: m.metadata.text,
           score: Math.round(m.score * 100) / 100,
           documentId: m.metadata.documentId,
-          documentName: m.metadata.documentName || "Unknown",
+          documentName: m.metadata.documentName || m.metadata.videoTitle || "Unknown",
           chunkIndex: m.metadata.chunkIndex,
           chunkId: m.metadata.chunkId,
         }));
         context = uniqueRelevant
           .map(
             (m, i) =>
-              `[Source ${i + 1} — Document: ${m.metadata.documentName} | DocId: ${m.metadata.documentId} | Chunk: ${m.metadata.chunkIndex}]\n${m.metadata.text}`
+              `[Source ${i + 1} — Document: ${m.metadata.documentName || m.metadata.videoTitle} | DocId: ${m.metadata.documentId} | Chunk: ${m.metadata.chunkIndex}]\n${m.metadata.text}`
           )
           .join("\n\n");
       }
@@ -208,10 +237,14 @@ router.post("/:id/message", protect, async (req, res) => {
     // Short-circuit: don't call the LLM at all when there's no relevant context —
     // the model will always add general knowledge regardless of instructions.
     let aiText;
-    if (!hasDocuments) {
-      aiText = "No documents have been uploaded to this chat. Please upload a PDF to get started.";
+    if (!hasSources) {
+      aiText = videoId
+        ? "This YouTube video is not indexed yet in this chat. Please ingest it first."
+        : "No documents have been uploaded to this chat. Please upload a PDF to get started.";
     } else if (!context) {
-      aiText = "The uploaded documents don't have information about this topic.";
+      aiText = videoId
+        ? "The selected YouTube video doesn't contain information about this topic."
+        : "The uploaded documents don't have information about this topic.";
     } else {
       aiText = await generateChatResponse(historyForGemini, context);
     }

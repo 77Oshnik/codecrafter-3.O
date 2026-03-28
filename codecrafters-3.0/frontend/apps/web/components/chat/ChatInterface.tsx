@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import {
   Loader2,
   Paperclip,
@@ -68,6 +69,7 @@ function buildRevisionBullets(text: string): string[] {
 
 export function ChatInterface() {
   const { data: session } = useSession()
+  const router = useRouter()
   const token = session?.user?.backendToken ?? ""
 
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -423,6 +425,12 @@ export function ChatInterface() {
       const toolId = tool.id
       const prompt = tool.prompt
 
+      if (toolId === "youtube") {
+        const qs = activeId ? `?conversationId=${encodeURIComponent(activeId)}` : ""
+        router.push(`/dashboard/youtube${qs}`)
+        return
+      }
+
       if (toolId === "quiz") {
         if (!activeId) {
           setError("Please open a conversation with uploaded documents before generating a quiz.")
@@ -489,7 +497,7 @@ export function ChatInterface() {
         // Resource tracking failure should not block chat output.
       }
     },
-    [token, activeId, handleSendMessage, refreshStudySidebar]
+    [token, activeId, handleSendMessage, refreshStudySidebar, router]
   )
 
   const openSavedFlashcards = useCallback(
