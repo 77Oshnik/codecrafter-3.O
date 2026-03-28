@@ -10,14 +10,38 @@ function getClient() {
 }
 
 /**
- * Generate a 768-dim embedding for the given text using text-embedding-004.
+ * Generate 3072-dim embedding for the given text using Gemini.
+ * gemini-embedding-001 natively supports 3072 dimensions.
  * @param {string} text
  * @returns {Promise<number[]>}
  */
 async function getEmbedding(text) {
-  const model = getClient().getGenerativeModel({ model: "text-embedding-004" });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured. Check your .env file.");
+  }
+
+  const model = getClient().getGenerativeModel({ model: "gemini-embedding-001" });
+
+  try {
+    const result = await model.embedContent(text);
+    const embeddings = result.embedding.values;
+
+    console.log(`[getEmbedding] Generated embedding with dimension: ${embeddings.length}`);
+
+    if (embeddings.length !== 3072) {
+      console.warn(`[getEmbedding] WARNING: Expected 3072 dimensions, got ${embeddings.length}`);
+    }
+
+    return embeddings;
+  } catch (error) {
+    console.error("[getEmbedding] Error details:", {
+      status: error.status,
+      statusText: error.statusText,
+      message: error.message,
+      apiKeySet: !!process.env.GEMINI_API_KEY,
+    });
+    throw new Error(`Failed to generate embedding: ${error.message}`);
+  }
 }
 
 /**
@@ -37,7 +61,7 @@ ${context}
     : "You are a helpful AI assistant. Answer the user's questions clearly and concisely.";
 
   const model = getClient().getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     systemInstruction,
   });
 

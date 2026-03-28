@@ -150,7 +150,7 @@ export function ConversationSidebar({
             ) : (
               documents.map((doc) => (
                 <div
-                  key={doc._id}
+                  key={doc._id?.toString?.() || doc.name || Math.random()}
                   className="group flex items-center gap-2 px-3 py-2 mx-2 rounded-md"
                 >
                   <FileText className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />

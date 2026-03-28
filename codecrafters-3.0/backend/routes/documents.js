@@ -5,7 +5,7 @@ const { protect } = require("../middleware/auth");
 const Document = require("../models/document");
 const { uploadPDF, deletePDF } = require("../services/cloudinaryService");
 const { getEmbedding } = require("../services/geminiService");
-const { upsertVectors, deleteVectors } = require("../services/pineconeService");
+const { upsertVectors, deleteVectors } = require("../services/qdrantService");
 
 const router = express.Router();
 
@@ -23,18 +23,85 @@ const upload = multer({
 });
 
 /**
- * Split text into overlapping chunks.
+ * Split PDF text into paragraph-aware chunks.
  */
-function chunkText(text, chunkSize = 1500, overlap = 200) {
-  const chunks = [];
-  let start = 0;
-  const clean = text.replace(/\s+/g, " ").trim();
-  while (start < clean.length) {
-    const end = Math.min(start + chunkSize, clean.length);
-    chunks.push(clean.slice(start, end));
-    if (end === clean.length) break;
-    start = end - overlap;
+function chunkText(text, maxChunkChars = 1500, overlapParagraphs = 1) {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+
+  const rawParagraphs = normalized
+    .split(/\n\s*\n+/)
+    .map((p) => p.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const paragraphs = [];
+  for (const paragraph of rawParagraphs) {
+    if (paragraph.length <= maxChunkChars) {
+      paragraphs.push(paragraph);
+      continue;
+    }
+
+    // Split oversized paragraphs by sentence boundaries first, then hard-split if needed.
+    const sentences = paragraph
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let sentenceBuffer = "";
+    for (const sentence of sentences) {
+      const candidate = sentenceBuffer ? `${sentenceBuffer} ${sentence}` : sentence;
+      if (candidate.length <= maxChunkChars) {
+        sentenceBuffer = candidate;
+        continue;
+      }
+
+      if (sentenceBuffer) {
+        paragraphs.push(sentenceBuffer);
+      }
+
+      if (sentence.length <= maxChunkChars) {
+        sentenceBuffer = sentence;
+      } else {
+        for (let i = 0; i < sentence.length; i += maxChunkChars) {
+          paragraphs.push(sentence.slice(i, i + maxChunkChars));
+        }
+        sentenceBuffer = "";
+      }
+    }
+
+    if (sentenceBuffer) {
+      paragraphs.push(sentenceBuffer);
+    }
   }
+
+  const chunks = [];
+  let current = "";
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    const candidate = current ? `${current}\n\n${p}` : p;
+
+    if (!current || candidate.length <= maxChunkChars) {
+      current = candidate;
+      continue;
+    }
+
+    chunks.push(current);
+
+    const overlapStart = Math.max(0, i - overlapParagraphs);
+    const overlapBlock = paragraphs.slice(overlapStart, i).join("\n\n");
+    current = overlapBlock ? `${overlapBlock}\n\n${p}` : p;
+
+    if (current.length > maxChunkChars) {
+      chunks.push(current.slice(0, maxChunkChars));
+      current = current.slice(maxChunkChars);
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
   return chunks;
 }
 
@@ -95,7 +162,7 @@ async function processPDF(doc, buffer, userId) {
   // Chunk text
   const chunks = chunkText(text);
 
-  // Embed each chunk and build Pinecone vectors
+  // Embed each chunk and build vector points
   const vectors = [];
   const vectorIds = [];
 
@@ -110,6 +177,7 @@ async function processPDF(doc, buffer, userId) {
         documentId: doc._id.toString(),
         documentName: doc.name,
         userId,
+        chunkId: id,
         chunkIndex: i,
       },
     });
@@ -152,7 +220,7 @@ router.delete("/:id", protect, async (req, res) => {
       return res.status(404).json({ error: "Document not found." });
     }
 
-    // Delete vectors from Pinecone
+    // Delete vectors from Qdrant
     if (doc.vectorIds && doc.vectorIds.length > 0) {
       await deleteVectors(doc.vectorIds, req.user.id);
     }

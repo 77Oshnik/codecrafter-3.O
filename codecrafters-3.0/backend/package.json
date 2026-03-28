@@ -13,7 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
-    "@pinecone-database/pinecone": "^5.0.0",
+    "@qdrant/js-client-rest": "^1.11.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.6.1",
     "cors": "^2.8.5",

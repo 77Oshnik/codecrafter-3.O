@@ -2,7 +2,7 @@ const express = require("express");
 const { protect } = require("../middleware/auth");
 const Conversation = require("../models/conversation");
 const { getEmbedding, generateChatResponse } = require("../services/geminiService");
-const { queryVectors } = require("../services/pineconeService");
+const { queryVectors } = require("../services/qdrantService");
 
 const router = express.Router();
 
@@ -146,15 +146,26 @@ router.post("/:id/message", protect, async (req, res) => {
       // Only use matches with a meaningful similarity score
       const relevant = matches.filter((m) => m.score > 0.5);
       if (relevant.length > 0) {
-        sources = relevant.map((m) => ({
+        const seen = new Set();
+        const uniqueRelevant = relevant.filter((m) => {
+          const key = `${m.metadata?.documentId || "unknown"}:${m.metadata?.chunkIndex ?? "x"}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        sources = uniqueRelevant.map((m) => ({
           text: m.metadata.text,
           score: Math.round(m.score * 100) / 100,
+          documentId: m.metadata.documentId,
           documentName: m.metadata.documentName || "Unknown",
+          chunkIndex: m.metadata.chunkIndex,
+          chunkId: m.metadata.chunkId,
         }));
-        context = relevant
+        context = uniqueRelevant
           .map(
             (m, i) =>
-              `[Source ${i + 1} — ${m.metadata.documentName}]\n${m.metadata.text}`
+              `[Source ${i + 1} — Document: ${m.metadata.documentName} | DocId: ${m.metadata.documentId} | Chunk: ${m.metadata.chunkIndex}]\n${m.metadata.text}`
           )
           .join("\n\n");
       }
