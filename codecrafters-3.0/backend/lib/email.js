@@ -20,6 +20,9 @@ function createTransporter() {
       user: smtpUser,
       pass: smtpPass,
     },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 }
 
