@@ -6,6 +6,7 @@ import { Loader2, Paperclip, X, CheckCircle, AlertCircle } from "lucide-react"
 import { ConversationSidebar } from "./ConversationSidebar"
 import { MessageList } from "./MessageList"
 import { MessageInput } from "./MessageInput"
+import { StudyToolsPanel } from "./StudyToolsPanel"
 import {
   listConversations,
   getConversation,
@@ -208,6 +209,13 @@ export function ChatInterface() {
     e.target.value = ""
   }
 
+  const handleSelectStudyTool = useCallback(
+    (prompt: string) => {
+      void handleSendMessage(prompt)
+    },
+    [handleSendMessage]
+  )
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       <ConversationSidebar
@@ -218,69 +226,79 @@ export function ChatInterface() {
         onDeleteConversation={handleDeleteConversation}
       />
 
-      <main className="flex flex-col flex-1 min-w-0 h-full">
-        {/* Error banner */}
-        {error && (
-          <div className="bg-destructive/10 border-b border-destructive/30 text-destructive text-xs px-4 py-2 flex items-center gap-2">
-            <span className="flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="underline hover:no-underline flex-shrink-0">
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        <MessageList messages={messages} isLoading={isLoading} />
-
-        {/* Document strip */}
-        <div className="border-t border-border px-4 py-2 flex items-center gap-2 flex-wrap bg-background/60">
-          {documents.map((doc) => (
-            <div
-              key={doc._id}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs max-w-[200px]"
-            >
-              {doc.status === "processing" ? (
-                <Loader2 className="w-3 h-3 animate-spin text-yellow-500 flex-shrink-0" />
-              ) : doc.status === "ready" ? (
-                <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-3 h-3 text-destructive flex-shrink-0" />
-              )}
-              <span className="truncate">{doc.name}</span>
-              <button
-                onClick={() => handleDeleteDocument(doc._id)}
-                className="flex-shrink-0 rounded-full hover:text-destructive transition-colors"
-              >
-                <X className="w-3 h-3" />
+      <main className="flex h-full min-w-0 flex-1">
+        <section className="flex h-full min-w-0 flex-1 flex-col">
+          {/* Error banner */}
+          {error && (
+            <div className="bg-destructive/10 border-b border-destructive/30 text-destructive text-xs px-4 py-2 flex items-center gap-2">
+              <span className="flex-1">{error}</span>
+              <button onClick={() => setError(null)} className="underline hover:no-underline shrink-0">
+                Dismiss
               </button>
             </div>
-          ))}
+          )}
 
-          <label
-            className={`flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-xs cursor-pointer hover:border-primary hover:text-primary transition-colors ${
-              uploading ? "pointer-events-none opacity-60" : ""
-            }`}
-          >
-            {uploading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <Paperclip className="w-3 h-3" />
-            )}
-            <span>{uploading ? "Uploading…" : "Add PDF"}</span>
-            <input
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={handleFileChange}
-              disabled={uploading}
-            />
-          </label>
-        </div>
+          <MessageList messages={messages} isLoading={isLoading} />
 
-        <MessageInput
-          onSend={handleSendMessage}
-          disabled={isLoading || !token}
-          placeholder={token ? "Ask anything… (Shift+Enter for new line)" : "Loading…"}
-        />
+          {/* Document strip */}
+          <div className="border-t border-border px-4 py-2 flex items-center gap-2 flex-wrap bg-background/60">
+            {documents.map((doc) => (
+              <div
+                key={doc._id}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs max-w-50"
+              >
+                {doc.status === "processing" ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-yellow-500 shrink-0" />
+                ) : doc.status === "ready" ? (
+                  <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
+                )}
+                <span className="truncate">{doc.name}</span>
+                <button
+                  onClick={() => handleDeleteDocument(doc._id)}
+                  className="shrink-0 rounded-full hover:text-destructive transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+
+            <label
+              className={`flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-xs cursor-pointer hover:border-primary hover:text-primary transition-colors ${
+                uploading ? "pointer-events-none opacity-60" : ""
+              }`}
+            >
+              {uploading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Paperclip className="w-3 h-3" />
+              )}
+              <span>{uploading ? "Uploading…" : "Add PDF"}</span>
+              <input
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={uploading}
+              />
+            </label>
+          </div>
+
+          <MessageInput
+            onSend={handleSendMessage}
+            disabled={isLoading || !token}
+            placeholder={token ? "Ask anything… (Shift+Enter for new line)" : "Loading…"}
+          />
+        </section>
+
+        <aside className="hidden h-full w-96 min-w-96 border-l border-border lg:flex xl:w-104 xl:min-w-104">
+          <StudyToolsPanel
+            disabled={isLoading || !token}
+            onSelectTool={handleSelectStudyTool}
+            variant="sidebar"
+          />
+        </aside>
       </main>
     </div>
   )
