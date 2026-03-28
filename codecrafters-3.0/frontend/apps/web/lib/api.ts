@@ -34,6 +34,7 @@ export interface Document {
   chunkCount: number
   cloudinaryUrl: string
   createdAt: string
+  summary?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +152,17 @@ export async function uploadDocument(
     body: formData,
   })
   return handleResponse<{ document: Document }>(res)
+}
+
+export async function generateDocumentSummary(
+  token: string,
+  id: string
+): Promise<{ summary: string }> {
+  const res = await fetch(`${BACKEND}/api/documents/${id}/summary`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return handleResponse<{ summary: string }>(res)
 }
 
 export async function deleteDocument(token: string, id: string): Promise<void> {

@@ -64,7 +64,7 @@ ${context}
 --- END CONTEXT ---`;
 
   const model = getClient().getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.1-flash-lite-preview",
     systemInstruction,
   });
 
@@ -81,4 +81,23 @@ ${context}
   return result.response.text();
 }
 
-module.exports = { getEmbedding, generateChatResponse };
+/**
+ * Generate a concise summary of the given document text.
+ * @param {string} text - Raw document text (will be truncated to first 12000 chars)
+ * @param {string} documentName
+ * @returns {Promise<string>}
+ */
+async function generateSummary(text, documentName) {
+  // Use gemini-1.5-flash (1500 free req/day) instead of gemini-2.5-flash (20/day)
+  // to avoid exhausting the quota shared with chat responses.
+  const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+  const prompt = `Summarize the following document titled "${documentName}" in 4–6 concise bullet points. Focus on the key topics, findings, and important data points. Return only the bullet points, no intro or outro text.
+
+Document text:
+${text.slice(0, 12000)}`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+module.exports = { getEmbedding, generateChatResponse, generateSummary };

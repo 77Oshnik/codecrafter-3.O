@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Paperclip, X, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, Paperclip, X, CheckCircle, AlertCircle, ChevronDown, FileText } from "lucide-react"
 import { ConversationSidebar } from "./ConversationSidebar"
 import { MessageList } from "./MessageList"
 import { MessageInput } from "./MessageInput"
@@ -16,6 +16,7 @@ import {
   listDocuments,
   uploadDocument,
   deleteDocument,
+  generateDocumentSummary,
   type Conversation,
   type Message,
   type Document,
@@ -29,6 +30,8 @@ export function ChatInterface() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [expandedDocId, setExpandedDocId] = useState<string | null>(null)
+  const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -203,6 +206,25 @@ export function ChatInterface() {
     [token]
   )
 
+  const handleGenerateSummary = useCallback(
+    async (docId: string) => {
+      if (!token || generatingSummaryId) return
+      setGeneratingSummaryId(docId)
+      try {
+        const { summary } = await generateDocumentSummary(token, docId)
+        setDocuments((prev) =>
+          prev.map((d) => (d._id === docId ? { ...d, summary } : d))
+        )
+        setExpandedDocId(docId)
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setGeneratingSummaryId(null)
+      }
+    },
+    [token, generatingSummaryId]
+  )
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) handleUploadDocument(file)
@@ -240,49 +262,113 @@ export function ChatInterface() {
 
           <MessageList messages={messages} isLoading={isLoading} />
 
-          {/* Document strip */}
-          <div className="border-t border-border px-4 py-2 flex items-center gap-2 flex-wrap bg-background/60">
-            {documents.map((doc) => (
-              <div
-                key={doc._id}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs max-w-50"
+          {/* Document accordion */}
+          <div className="border-t border-border bg-background/60">
+            {/* Upload row */}
+            <div className="flex items-center justify-between px-4 py-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                {documents.length === 0
+                  ? "No documents"
+                  : `${documents.length} document${documents.length > 1 ? "s" : ""}`}
+              </span>
+              <label
+                className={`flex cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-xs transition-colors hover:border-primary hover:text-primary ${
+                  uploading ? "pointer-events-none opacity-60" : ""
+                }`}
               >
-                {doc.status === "processing" ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-yellow-500 shrink-0" />
-                ) : doc.status === "ready" ? (
-                  <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                {uploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
+                  <Paperclip className="h-3 w-3" />
                 )}
-                <span className="truncate">{doc.name}</span>
-                <button
-                  onClick={() => handleDeleteDocument(doc._id)}
-                  className="shrink-0 rounded-full hover:text-destructive transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
+                <span>{uploading ? "Uploading…" : "Add PDF"}</span>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                />
+              </label>
+            </div>
 
-            <label
-              className={`flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-xs cursor-pointer hover:border-primary hover:text-primary transition-colors ${
-                uploading ? "pointer-events-none opacity-60" : ""
-              }`}
-            >
-              {uploading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Paperclip className="w-3 h-3" />
-              )}
-              <span>{uploading ? "Uploading…" : "Add PDF"}</span>
-              <input
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={handleFileChange}
-                disabled={uploading}
-              />
-            </label>
+            {/* Accordion items */}
+            {documents.length > 0 && (
+              <div className="max-h-[240px] divide-y divide-border overflow-y-auto border-t border-border">
+                {documents.map((doc) => {
+                  const isOpen = expandedDocId === doc._id
+                  return (
+                    <div key={doc._id}>
+                      {/* Header row */}
+                      <div className="flex items-center gap-2 px-4 py-2">
+                        {doc.status === "processing" ? (
+                          <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-yellow-500" />
+                        ) : doc.status === "ready" ? (
+                          <CheckCircle className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
+                        ) : (
+                          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-destructive" />
+                        )}
+                        <FileText className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate text-xs">{doc.name}</span>
+
+                        {doc.status === "ready" && (
+                          <span className="flex-shrink-0 text-[10px] text-muted-foreground">
+                            {doc.chunkCount} chunks
+                          </span>
+                        )}
+
+                        {/* Generate summary button */}
+                        {doc.status === "ready" && !doc.summary && (
+                          <button
+                            onClick={() => handleGenerateSummary(doc._id)}
+                            disabled={generatingSummaryId === doc._id}
+                            className="flex-shrink-0 text-[10px] text-primary underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Generate summary"
+                          >
+                            {generatingSummaryId === doc._id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              "Summarize"
+                            )}
+                          </button>
+                        )}
+
+                        {/* Expand toggle */}
+                        {doc.status === "ready" && doc.summary && (
+                          <button
+                            onClick={() => setExpandedDocId(isOpen ? null : doc._id)}
+                            className="rounded p-0.5 transition-colors hover:bg-accent"
+                            title={isOpen ? "Hide summary" : "Show summary"}
+                          >
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            if (isOpen) setExpandedDocId(null)
+                            handleDeleteDocument(doc._id)
+                          }}
+                          className="flex-shrink-0 rounded p-0.5 transition-colors hover:text-destructive"
+                          title="Remove document"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Summary panel */}
+                      {isOpen && doc.summary && (
+                        <div className="whitespace-pre-wrap bg-muted/30 px-4 pb-3 text-xs leading-relaxed text-muted-foreground">
+                          {doc.summary}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <MessageInput

@@ -4,7 +4,7 @@ const pdfParse = require("pdf-parse");
 const { protect } = require("../middleware/auth");
 const Document = require("../models/document");
 const { uploadPDF, deletePDF } = require("../services/cloudinaryService");
-const { getEmbedding } = require("../services/geminiService");
+const { getEmbedding, generateSummary } = require("../services/geminiService");
 const { upsertVectors, deleteVectors } = require("../services/qdrantService");
 
 const router = express.Router();
@@ -187,14 +187,23 @@ async function processPDF(doc, buffer, userId) {
     vectorIds.push(id);
   }
 
-  // Upsert to Pinecone (namespace = userId for isolation)
+  // Upsert to Qdrant
   await upsertVectors(vectors, userId);
+
+  // Generate summary
+  let summary = "";
+  try {
+    summary = await generateSummary(text, doc.name);
+  } catch (err) {
+    console.warn("[processPDF] Summary generation failed:", err.message);
+  }
 
   // Update document record
   await Document.findByIdAndUpdate(doc._id, {
     status: "ready",
     vectorIds,
     chunkCount: chunks.length,
+    summary,
   });
 }
 
@@ -204,7 +213,7 @@ router.get("/", protect, async (req, res) => {
     const filter = { userId: req.user.id };
     if (req.query.conversationId) filter.conversationId = req.query.conversationId;
     const docs = await Document.find(filter)
-      .select("name status chunkCount cloudinaryUrl createdAt conversationId")
+      .select("name status chunkCount cloudinaryUrl createdAt conversationId summary")
       .sort({ createdAt: -1 });
     return res.json(docs);
   } catch (err) {
@@ -240,6 +249,31 @@ router.delete("/:id", protect, async (req, res) => {
   } catch (err) {
     console.error("[documents/delete]", err);
     return res.status(500).json({ error: "Failed to delete document." });
+  }
+});
+
+// POST /api/documents/:id/summary — regenerate summary for a document
+router.post("/:id/summary", protect, async (req, res) => {
+  try {
+    const doc = await Document.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!doc) return res.status(404).json({ error: "Document not found." });
+    if (doc.status !== "ready") {
+      return res.status(400).json({ error: "Document is not ready yet." });
+    }
+
+    // Re-download the PDF from Cloudinary and extract text
+    const response = await fetch(doc.cloudinaryUrl);
+    if (!response.ok) throw new Error("Failed to download document from storage.");
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const pdfData = await pdfParse(buffer);
+
+    const summary = await generateSummary(pdfData.text, doc.name);
+    await Document.findByIdAndUpdate(doc._id, { summary });
+
+    return res.json({ summary });
+  } catch (err) {
+    console.error("[documents/summary]", err);
+    return res.status(500).json({ error: err.message || "Failed to generate summary." });
   }
 });
 

@@ -157,8 +157,16 @@ router.post("/:id/message", protect, async (req, res) => {
       const queryEmbedding = await getEmbedding(message.trim());
       const matches = await queryVectors(queryEmbedding, userId, 5, conversation._id.toString());
 
-      // Only use matches with a strong similarity score (>0.65 avoids tangential keyword matches)
-      const relevant = matches.filter((m) => m.score > 0.65);
+      // Primary: high-confidence matches (>0.65).
+      // Fallback: if no high-confidence match but documents exist (e.g. meta queries like
+      // "what is this document"), use top-3 chunks above 0.4 so the model has some context.
+      const highRelevant = matches.filter((m) => m.score > 0.65);
+      const relevant =
+        highRelevant.length > 0
+          ? highRelevant
+          : hasDocuments
+            ? matches.filter((m) => m.score > 0.4).slice(0, 3)
+            : [];
       if (relevant.length > 0) {
         const seen = new Set();
         const uniqueRelevant = relevant.filter((m) => {
