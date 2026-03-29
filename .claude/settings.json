@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -r \"chat\\\\|ai\\\\|rag\\\\|embedding\" /Users/oshnikdeeptiwari/Documents/GitHub/codecrafter-3.O/codecrafters-3.0 --include=*.ts --include=*.tsx --include=*.js)"
+      "Bash(grep -r \"chat\\\\|ai\\\\|rag\\\\|embedding\" /Users/oshnikdeeptiwari/Documents/GitHub/codecrafter-3.O/codecrafters-3.0 --include=*.ts --include=*.tsx --include=*.js)",
+      "Bash(rm -rf node_modules package-lock.json)",
+      "Bash(npm install:*)"
     ]
   }
 }

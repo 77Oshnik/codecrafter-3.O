@@ -7,6 +7,7 @@ const YouTubeVideo = require("../models/youtubeVideo");
 const LearningPath = require("../models/learningPath");
 const LearningQuizResult = require("../models/learningQuizResult");
 const UserMemory = require("../models/userMemory");
+const WebcamFocusSession = require("../models/webcamFocusSession");
 
 const router = express.Router();
 
@@ -64,6 +65,8 @@ router.get("/summary", protect, async (req, res) => {
       recentQuizResults,
       recentConversations,
       recentVideos,
+      webcamFocusAgg,
+      latestWebcamSession,
     ] = await Promise.all([
       Conversation.countDocuments({ userId }),
       Conversation.find({ userId }).select("messages updatedAt createdAt").lean(),
@@ -115,6 +118,24 @@ router.get("/summary", protect, async (req, res) => {
         .limit(8)
         .select("title videoId createdAt status")
         .lean(),
+      WebcamFocusSession.aggregate([
+        { $match: { userId: userObjectId } },
+        {
+          $group: {
+            _id: null,
+            sessions: { $sum: 1 },
+            focusedMs: { $sum: "$focusedMs" },
+            awayMs: { $sum: "$awayMs" },
+            avgFocusScore: { $avg: "$focusScore" },
+          },
+        },
+      ]),
+      WebcamFocusSession.findOne({ userId: userObjectId })
+        .sort({ updatedAt: -1 })
+        .select(
+          "latestFaceDetected latestHeadYaw latestHeadPitch latestEyesOpenProb latestBlinkClosureMs awayMs"
+        )
+        .lean(),
     ]);
 
     const totalMessages = conversationDocs.reduce(
@@ -131,6 +152,12 @@ router.get("/summary", protect, async (req, res) => {
 
     const quizStats = learningQuizAgg[0] || { totalQuizzes: 0, avgScore: 0 };
     const memoryStats = memoryAgg[0] || { weakCount: 0, strongCount: 0, dueToday: 0 };
+    const webcamStats = webcamFocusAgg[0] || {
+      sessions: 0,
+      focusedMs: 0,
+      awayMs: 0,
+      avgFocusScore: 0,
+    };
 
     const dateKeys = [
       ...conversationDocs.map((c) => getDayKey(c.updatedAt || c.createdAt)),
@@ -208,6 +235,22 @@ router.get("/summary", protect, async (req, res) => {
       documents: {
         totalDocuments,
         readyDocuments,
+      },
+      webcam: {
+        sessions: webcamStats.sessions || 0,
+        focusedMinutes: Math.round((webcamStats.focusedMs || 0) / 60000),
+        awayMinutes: Math.round((webcamStats.awayMs || 0) / 60000),
+        avgFocusScore: Math.round(webcamStats.avgFocusScore || 0),
+        latest: latestWebcamSession
+          ? {
+              faceDetected: Boolean(latestWebcamSession.latestFaceDetected),
+              headYaw: Number(latestWebcamSession.latestHeadYaw || 0),
+              headPitch: Number(latestWebcamSession.latestHeadPitch || 0),
+              eyesOpenProb: Number(latestWebcamSession.latestEyesOpenProb || 0),
+              blinkClosureMs: Number(latestWebcamSession.latestBlinkClosureMs || 0),
+              awayMs: Number(latestWebcamSession.awayMs || 0),
+            }
+          : null,
       },
       recentActivity,
     });

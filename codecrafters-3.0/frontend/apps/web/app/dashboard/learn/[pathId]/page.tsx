@@ -7,7 +7,7 @@ import { ChevronLeft, Loader2, Brain, Calendar, Trophy, Activity } from "lucide-
 import { RoadmapView } from "@/components/learning/RoadmapView"
 import { RoadmapDiagram } from "@/components/learning/RoadmapDiagram"
 import { MemoryPanel } from "@/components/learning/MemoryPanel"
-import { getLearningPath, type LearningPath } from "@/lib/api"
+import { getLearningPath, getWebcamFocusSummary, type LearningPath, type WebcamFocusSummary } from "@/lib/api"
 
 export default function RoadmapPage() {
   const { data: session } = useSession()
@@ -19,6 +19,7 @@ export default function RoadmapPage() {
   const [path, setPath] = useState<LearningPath | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<"roadmap" | "diagram" | "memory">("roadmap")
+  const [webcamSummary, setWebcamSummary] = useState<WebcamFocusSummary | null>(null)
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -27,6 +28,10 @@ export default function RoadmapPage() {
       .then(setPath)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
+
+    getWebcamFocusSummary(token, pathId)
+      .then(setWebcamSummary)
+      .catch(() => setWebcamSummary(null))
   }, [token, pathId])
 
   if (loading) {
@@ -135,6 +140,17 @@ export default function RoadmapPage() {
             <span>Core subtopics: <span className="font-semibold text-foreground">{coreSubtopics.length}</span></span>
             <span>Completed core: <span className="font-semibold text-foreground">{completedCoreSubtopics.length}</span></span>
             <span>Last active: <span className="font-semibold text-foreground">{path.lastActiveAt ? new Date(path.lastActiveAt).toLocaleDateString() : "N/A"}</span></span>
+          </div>
+
+          <div className="border border-border rounded-xl bg-background p-3 text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+            <span>Webcam sessions: <span className="font-semibold text-foreground">{webcamSummary?.sessions ?? 0}</span></span>
+            <span>Focused: <span className="font-semibold text-foreground">{webcamSummary?.focusedMinutes ?? 0}m</span></span>
+            <span>Away: <span className="font-semibold text-foreground">{webcamSummary?.awayMinutes ?? 0}m</span></span>
+            <span>Focus score: <span className="font-semibold text-foreground">{webcamSummary?.avgFocusScore ?? 0}%</span></span>
+            <span>Face detected: <span className="font-semibold text-foreground">{webcamSummary?.latest?.faceDetected ? "true" : "false"}</span></span>
+            <span>Yaw/Pitch: <span className="font-semibold text-foreground">{(webcamSummary?.latest?.headYaw ?? 0).toFixed(1)}° / {(webcamSummary?.latest?.headPitch ?? 0).toFixed(1)}°</span></span>
+            <span>Eyes open: <span className="font-semibold text-foreground">{Math.round((webcamSummary?.latest?.eyesOpenProb ?? 0) * 100)}%</span></span>
+            <span>Away (latest): <span className="font-semibold text-foreground">{Math.round((webcamSummary?.latest?.awayMs ?? 0) / 1000)}s</span></span>
           </div>
         </div>
 

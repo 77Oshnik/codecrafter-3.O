@@ -184,6 +184,13 @@ export interface DashboardSummary {
     totalDocuments: number
     readyDocuments: number
   }
+  webcam: {
+    sessions: number
+    focusedMinutes: number
+    awayMinutes: number
+    avgFocusScore: number
+    latest: WebcamLatestMetrics | null
+  }
   recentActivity: Array<{
     type: "quiz" | "chat" | "youtube"
     title: string
@@ -843,10 +850,33 @@ export interface LearningDashboard {
   totalPaths: number
   totalQuizzes: number
   avgScore: number
+  webcam?: {
+    sessions: number
+    focusedMinutes: number
+    awayMinutes: number
+    avgFocusScore: number
+  }
   weakTopics: MemoryItem[]
   strongTopics: MemoryItem[]
   dueForReview: MemoryItem[]
   recentActivity: { topicId: string; subtopicId: string; percentage: number; createdAt: string }[]
+}
+
+export interface WebcamLatestMetrics {
+  faceDetected: boolean
+  headYaw: number
+  headPitch: number
+  eyesOpenProb: number
+  blinkClosureMs: number
+  awayMs: number
+}
+
+export interface WebcamFocusSummary {
+  sessions: number
+  focusedMinutes: number
+  awayMinutes: number
+  avgFocusScore: number
+  latest: WebcamLatestMetrics | null
 }
 
 // ---------------------------------------------------------------------------
@@ -1012,6 +1042,74 @@ export async function getMemoryData(
   pathId: string
 ): Promise<{ dueToday: MemoryItem[]; upcoming: MemoryItem[]; mastered: MemoryItem[] }> {
   const res = await fetch(`${BACKEND}/api/learning/memory/${pathId}`, {
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
+}
+
+export async function startWebcamFocusSession(
+  token: string,
+  payload: { pathId: string; topicId: string; subtopicId: string; cameraEnabled: boolean }
+): Promise<{ sessionId: string }> {
+  const res = await fetch(`${BACKEND}/api/learning/focus/webcam/start`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  })
+  return handleResponse(res)
+}
+
+export async function pushWebcamFocusEvent(
+  token: string,
+  sessionId: string,
+  payload: {
+    deltaMs: number
+    focusedMs: number
+    awayMs: number
+    interruptions: number
+    faceDetected: boolean
+    headYaw: number
+    headPitch: number
+    eyesOpenProb: number
+    blinkClosureMs: number
+  }
+): Promise<{ success: boolean }> {
+  const res = await fetch(`${BACKEND}/api/learning/focus/webcam/${sessionId}/event`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  })
+  return handleResponse(res)
+}
+
+export async function endWebcamFocusSession(
+  token: string,
+  sessionId: string,
+  payload: {
+    durationMs: number
+    focusedMs: number
+    awayMs: number
+    interruptions: number
+    faceDetected: boolean
+    headYaw: number
+    headPitch: number
+    eyesOpenProb: number
+    blinkClosureMs: number
+  }
+): Promise<{ success: boolean; focusScore: number }> {
+  const res = await fetch(`${BACKEND}/api/learning/focus/webcam/${sessionId}/end`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  })
+  return handleResponse(res)
+}
+
+export async function getWebcamFocusSummary(
+  token: string,
+  pathId: string
+): Promise<WebcamFocusSummary> {
+  const res = await fetch(`${BACKEND}/api/learning/focus/webcam/summary/${pathId}`, {
     headers: authHeaders(token),
   })
   return handleResponse(res)

@@ -1,5 +1,8 @@
 import "@workspace/ui/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ToastViewport } from "@/components/system/ToastViewport"
+import { StudySessionProvider } from "@/contexts/StudySessionContext"
+import { StudySessionFloatingTimer } from "@/components/study/StudySessionFloatingTimer"
 import { cn } from "@workspace/ui/lib/utils"
 import { Noto_Serif_JP, Poppins } from "next/font/google"
 
@@ -29,7 +32,13 @@ export default function RootLayout({
       className={cn("antialiased", poppins.variable, notoSerifJp.variable)}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <StudySessionProvider>
+            {children}
+            <ToastViewport />
+            <StudySessionFloatingTimer />
+          </StudySessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

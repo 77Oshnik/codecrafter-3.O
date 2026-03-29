@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { signOut } from "@/auth"
+import { StartStudySessionButton } from "@/components/study/StartStudySessionButton"
 import {
   LogOut,
   Brain,
@@ -109,6 +110,13 @@ export default async function DashboardPage() {
               totalDocuments,
               readyDocuments,
             },
+            webcam: {
+              sessions: 0,
+              focusedMinutes: 0,
+              awayMinutes: 0,
+              avgFocusScore: 0,
+              latest: null,
+            },
             recentActivity: (learning.recentActivity || []).map((item) => ({
               type: "quiz" as const,
               title: `${item.topicId} / ${item.subtopicId}`,
@@ -135,6 +143,7 @@ export default async function DashboardPage() {
   const chat = summary?.chat
   const youtube = summary?.youtube
   const documents = summary?.documents
+  const webcam = summary?.webcam
   const recentActivity = summary?.recentActivity || []
   const recentActivityTop = recentActivity.slice(0, 3)
 
@@ -203,11 +212,23 @@ export default async function DashboardPage() {
 
       <div className="flex-1 overflow-y-auto px-4 pb-7 pt-4 md:px-6 md:pb-8">
         <div className="mx-auto max-w-7xl space-y-7">
-          <div className="space-y-1.5">
-            <h1 className="font-heading text-3xl font-semibold leading-tight md:text-4xl">Welcome back</h1>
-            <p className="text-sm leading-relaxed text-muted-foreground md:text-base">
-              Choose what you want to work on today.
-            </p>
+          <div className="space-y-1.5 flex flex-col gap-4">
+            <div>
+              <h1 className="font-heading text-3xl font-semibold leading-tight md:text-4xl">Welcome back</h1>
+              <p className="text-sm leading-relaxed text-muted-foreground md:text-base">
+                Choose what you want to work on today.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between border border-border rounded-xl p-4 bg-background">
+              <div>
+                <p className="text-sm font-semibold">Focus Session</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Set a timer, track focus via camera, and get break reminders every hour.
+                </p>
+              </div>
+              <StartStudySessionButton />
+            </div>
           </div>
 
           {summaryError ? (
@@ -317,6 +338,37 @@ export default async function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Videos Ready</span>
                   <span className="font-semibold">{youtube?.readyVideos ?? 0}/{youtube?.totalVideos ?? 0}</span>
+                </div>
+                <div className="pt-2 mt-1 border-t border-border" />
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Webcam Sessions</span>
+                  <span className="font-semibold">{webcam?.sessions ?? 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Focused Minutes</span>
+                  <span className="font-semibold">{webcam?.focusedMinutes ?? 0}m</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Focus Score</span>
+                  <span className="font-semibold">{webcam?.avgFocusScore ?? 0}%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Face Detected</span>
+                  <span className="font-semibold">{webcam?.latest?.faceDetected ? "true" : "false"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Head Yaw / Pitch</span>
+                  <span className="font-semibold">
+                    {(webcam?.latest?.headYaw ?? 0).toFixed(1)}° / {(webcam?.latest?.headPitch ?? 0).toFixed(1)}°
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Eyes Open</span>
+                  <span className="font-semibold">{Math.round((webcam?.latest?.eyesOpenProb ?? 0) * 100)}%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Away</span>
+                  <span className="font-semibold">{Math.round((webcam?.latest?.awayMs ?? 0) / 1000)}s</span>
                 </div>
               </div>
 

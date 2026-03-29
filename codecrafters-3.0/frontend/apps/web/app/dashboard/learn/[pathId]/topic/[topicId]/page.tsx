@@ -7,9 +7,10 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
   ChevronLeft, Loader2, Play, CheckCircle, Lock,
-  Search, BookOpen, Brain, ChevronRight
+  Search, BookOpen, Brain, ChevronRight, Camera
 } from "lucide-react"
 import { SubtopicQuizModal } from "@/components/learning/SubtopicQuizModal"
+import { useWebcamTracer } from "@/hooks/useWebcamTracer"
 import {
   getLearningPath,
   getSubtopicContent,
@@ -69,8 +70,17 @@ function TopicPageInner() {
   const [resourceTab, setResourceTab] = useState<"videos" | "search">("videos")
   const [quizLoading, setQuizLoading] = useState(false)
   const [showQuiz, setShowQuiz] = useState(false)
+  const [webcamEnabled, setWebcamEnabled] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState("")
+
+  const webcamTracer = useWebcamTracer({
+    enabled: webcamEnabled && Boolean(activeSubtopicId),
+    token,
+    pathId,
+    topicId,
+    subtopicId: activeSubtopicId,
+  })
 
   const topic = path?.roadmap.find(t => t.id === topicId)
   const activeSubtopic = topic?.subtopics.find(s => s.id === activeSubtopicId)
@@ -316,12 +326,39 @@ function TopicPageInner() {
                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary capitalize">
                     {content.userLevel}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setWebcamEnabled(v => !v)}
+                    className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                      webcamEnabled
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : "border-border bg-background text-muted-foreground"
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    Webcam tracer {webcamEnabled ? "ON" : "OFF"}
+                  </button>
                   {activeSubtopic?.type && activeSubtopic.type !== "core" && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 capitalize">
                       {activeSubtopic.type}
                     </span>
                   )}
                 </div>
+                {webcamEnabled ? (
+                  <div className="mt-2 rounded-lg border border-border bg-muted/20 p-2.5 text-[11px] text-muted-foreground">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      <span>Face detected: <span className="text-foreground font-medium">{webcamTracer.metrics.faceDetected ? "true" : "false"}</span></span>
+                      <span>Eyes open: <span className="text-foreground font-medium">{Math.round(webcamTracer.metrics.eyesOpenProb * 100)}%</span></span>
+                      <span>Head yaw: <span className="text-foreground font-medium">{webcamTracer.metrics.headYaw.toFixed(1)}°</span></span>
+                      <span>Head pitch: <span className="text-foreground font-medium">{webcamTracer.metrics.headPitch.toFixed(1)}°</span></span>
+                      <span>Blink closure: <span className="text-foreground font-medium">{Math.round(webcamTracer.metrics.blinkClosureMs)}ms</span></span>
+                      <span>Away: <span className="text-foreground font-medium">{Math.round(webcamTracer.awayMs / 1000)}s</span></span>
+                    </div>
+                    {webcamTracer.error ? (
+                      <p className="mt-1 text-destructive">{webcamTracer.error}</p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {activeSubtopic?.adaptive && activeSubtopic.unlockReason && (
                   <p className="text-xs text-muted-foreground mt-2">
                     {activeSubtopic.unlockReason === "quiz-failed"

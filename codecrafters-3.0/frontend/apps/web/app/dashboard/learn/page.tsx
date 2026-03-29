@@ -9,6 +9,7 @@ import { AssessmentView } from "@/components/learning/AssessmentView"
 import { AssessmentResult } from "@/components/learning/AssessmentResult"
 import {
   listLearningPaths,
+  getLearningDashboard,
   startLearningAssessment,
   submitLearningAssessment,
   deleteLearningPath,
@@ -47,6 +48,7 @@ export default function LearnPage() {
 
   const [stage, setStage] = useState<Stage>({ type: "list" })
   const [paths, setPaths] = useState<LearningPathSummary[]>([])
+  const [webcam, setWebcam] = useState({ sessions: 0, focusedMinutes: 0, awayMinutes: 0, avgFocusScore: 0 })
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -63,6 +65,19 @@ export default function LearnPage() {
       .then(setPaths)
       .catch(console.error)
       .finally(() => setLoading(false))
+
+    getLearningDashboard(token)
+      .then(data => {
+        if (data.webcam) {
+          setWebcam({
+            sessions: data.webcam.sessions || 0,
+            focusedMinutes: data.webcam.focusedMinutes || 0,
+            awayMinutes: data.webcam.awayMinutes || 0,
+            avgFocusScore: data.webcam.avgFocusScore || 0,
+          })
+        }
+      })
+      .catch(() => undefined)
   }, [token])
 
   const handleStartPath = async (topic: string) => {
@@ -198,6 +213,16 @@ export default function LearnPage() {
                 <div className="border border-border rounded-xl p-4 bg-background">
                   <p className="text-xs text-muted-foreground">Avg Progress</p>
                   <p className="text-2xl font-semibold mt-1">{avgProgress}%</p>
+                </div>
+              </div>
+
+              <div className="border border-border rounded-xl p-4 bg-background">
+                <p className="text-sm font-semibold">Webcam Tracer</p>
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                  <span>Sessions: <span className="font-semibold text-foreground">{webcam.sessions}</span></span>
+                  <span>Focused: <span className="font-semibold text-foreground">{webcam.focusedMinutes}m</span></span>
+                  <span>Away: <span className="font-semibold text-foreground">{webcam.awayMinutes}m</span></span>
+                  <span>Focus score: <span className="font-semibold text-foreground">{webcam.avgFocusScore}%</span></span>
                 </div>
               </div>
 

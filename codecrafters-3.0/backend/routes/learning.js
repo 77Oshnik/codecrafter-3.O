@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const { protect: auth } = require('../middleware/auth');
 const LearningPath = require('../models/learningPath');
@@ -7,6 +8,7 @@ const TopicContent = require('../models/topicContent');
 const LearningQuiz = require('../models/learningQuiz');
 const LearningQuizResult = require('../models/learningQuizResult');
 const UserMemory = require('../models/userMemory');
+const WebcamFocusSession = require('../models/webcamFocusSession');
 const {
   generateAssessmentQuestions,
   classifyUserLevel,
@@ -886,7 +888,10 @@ router.post('/quiz/:quizId/submit', async (req, res) => {
 // User's overall learning stats
 router.get('/dashboard', async (req, res) => {
   try {
-    const [paths, weakMemories, dueForReview, recentResults] = await Promise.all([
+    const userObjectId = mongoose.Types.ObjectId.isValid(req.user.id)
+      ? new mongoose.Types.ObjectId(req.user.id)
+      : null;
+    const [paths, weakMemories, dueForReview, recentResults, webcamAgg] = await Promise.all([
       LearningPath.find({ userId: req.user.id })
         .select('topic userLevel status overallProgress totalTopics completedTopics createdAt lastActiveAt')
         .sort({ lastActiveAt: -1 }),
@@ -898,7 +903,19 @@ router.get('/dashboard', async (req, res) => {
       }).select('topicTitle subtopicTitle mainTopic confidenceScore nextReviewAt learningPathId'),
       LearningQuizResult.find({ userId: req.user.id })
         .sort({ createdAt: -1 }).limit(10)
-        .select('topicId subtopicId percentage createdAt')
+        .select('topicId subtopicId percentage createdAt'),
+      WebcamFocusSession.aggregate([
+        { $match: { userId: userObjectId } },
+        {
+          $group: {
+            _id: null,
+            sessions: { $sum: 1 },
+            focusedMs: { $sum: '$focusedMs' },
+            awayMs: { $sum: '$awayMs' },
+            avgFocusScore: { $avg: '$focusScore' }
+          }
+        }
+      ])
     ]);
 
     const activePaths = paths.filter(p => p.status === 'active');
@@ -910,6 +927,7 @@ router.get('/dashboard', async (req, res) => {
     const avgScore = recentResults.length > 0
       ? Math.round(recentResults.reduce((a, r) => a + r.percentage, 0) / recentResults.length)
       : 0;
+    const webcam = webcamAgg[0] || { sessions: 0, focusedMs: 0, awayMs: 0, avgFocusScore: 0 };
 
     res.json({
       activePaths,
@@ -917,6 +935,12 @@ router.get('/dashboard', async (req, res) => {
       totalPaths: paths.length,
       totalQuizzes,
       avgScore,
+      webcam: {
+        sessions: webcam.sessions || 0,
+        focusedMinutes: Math.round((webcam.focusedMs || 0) / 60000),
+        awayMinutes: Math.round((webcam.awayMs || 0) / 60000),
+        avgFocusScore: Math.round(webcam.avgFocusScore || 0)
+      },
       weakTopics: weakMemories.slice(0, 10),
       strongTopics: strongMemories.slice(0, 10),
       dueForReview: dueForReview.slice(0, 10),
@@ -925,6 +949,182 @@ router.get('/dashboard', async (req, res) => {
   } catch (err) {
     console.error('Dashboard error:', err);
     res.status(500).json({ error: 'Failed to fetch dashboard' });
+  }
+});
+
+// ─── Webcam Focus Tracking ──────────────────────────────────────────────────
+
+router.post('/focus/webcam/start', async (req, res) => {
+  try {
+    const { pathId, topicId, subtopicId, cameraEnabled = true, source = 'learn-topic-page' } = req.body;
+
+    if (!pathId || !topicId || !subtopicId) {
+      return res.status(400).json({ error: 'pathId, topicId and subtopicId are required' });
+    }
+
+    const path = await LearningPath.findOne({ _id: pathId, userId: req.user.id }).select('_id');
+    if (!path) return res.status(404).json({ error: 'Learning path not found' });
+
+    const session = await WebcamFocusSession.create({
+      userId: req.user.id,
+      learningPathId: pathId,
+      topicId,
+      subtopicId,
+      source,
+      cameraEnabled,
+      startedAt: new Date()
+    });
+
+    return res.json({ sessionId: session._id });
+  } catch (err) {
+    console.error('[focus/webcam/start] error', err);
+    return res.status(500).json({ error: 'Failed to start webcam focus session' });
+  }
+});
+
+router.post('/focus/webcam/:sessionId/event', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const {
+      deltaMs = 0,
+      focusedMs = 0,
+      awayMs = 0,
+      interruptions = 0,
+      faceDetected = false,
+      headYaw = 0,
+      headPitch = 0,
+      eyesOpenProb = 0,
+      blinkClosureMs = 0
+    } = req.body;
+
+    const session = await WebcamFocusSession.findOne({ _id: sessionId, userId: req.user.id });
+    if (!session) return res.status(404).json({ error: 'Webcam focus session not found' });
+
+    const safeDeltaMs = Math.max(0, Number(deltaMs) || 0);
+    const safeFocusedMs = Math.max(0, Number(focusedMs) || 0);
+    const safeAwayMs = Math.max(0, Number(awayMs) || 0);
+
+    session.durationMs = (session.durationMs || 0) + safeDeltaMs;
+    session.focusedMs = (session.focusedMs || 0) + safeFocusedMs;
+    session.awayMs = (session.awayMs || 0) + safeAwayMs;
+    session.interruptions = (session.interruptions || 0) + Math.max(0, Number(interruptions) || 0);
+    session.eventsCount = (session.eventsCount || 0) + 1;
+
+    session.latestFaceDetected = Boolean(faceDetected);
+    session.latestHeadYaw = Number(headYaw) || 0;
+    session.latestHeadPitch = Number(headPitch) || 0;
+    session.latestEyesOpenProb = Math.max(0, Math.min(1, Number(eyesOpenProb) || 0));
+    session.latestBlinkClosureMs = Math.max(0, Number(blinkClosureMs) || 0);
+
+    if (session.durationMs > 0) {
+      session.focusScore = Math.round((session.focusedMs / session.durationMs) * 100);
+    }
+
+    await session.save();
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[focus/webcam/event] error', err);
+    return res.status(500).json({ error: 'Failed to store webcam focus event' });
+  }
+});
+
+router.post('/focus/webcam/:sessionId/end', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const {
+      durationMs,
+      focusedMs,
+      awayMs,
+      interruptions,
+      faceDetected,
+      headYaw,
+      headPitch,
+      eyesOpenProb,
+      blinkClosureMs
+    } = req.body;
+
+    const session = await WebcamFocusSession.findOne({ _id: sessionId, userId: req.user.id });
+    if (!session) return res.status(404).json({ error: 'Webcam focus session not found' });
+
+    if (typeof durationMs === 'number') session.durationMs = Math.max(0, durationMs);
+    if (typeof focusedMs === 'number') session.focusedMs = Math.max(0, focusedMs);
+    if (typeof awayMs === 'number') session.awayMs = Math.max(0, awayMs);
+    if (typeof interruptions === 'number') session.interruptions = Math.max(0, interruptions);
+    if (typeof faceDetected === 'boolean') session.latestFaceDetected = faceDetected;
+    if (typeof headYaw === 'number') session.latestHeadYaw = headYaw;
+    if (typeof headPitch === 'number') session.latestHeadPitch = headPitch;
+    if (typeof eyesOpenProb === 'number') {
+      session.latestEyesOpenProb = Math.max(0, Math.min(1, eyesOpenProb));
+    }
+    if (typeof blinkClosureMs === 'number') {
+      session.latestBlinkClosureMs = Math.max(0, blinkClosureMs);
+    }
+
+    session.endedAt = new Date();
+    if (!session.durationMs || session.durationMs <= 0) {
+      session.durationMs = Math.max(0, session.endedAt.getTime() - new Date(session.startedAt).getTime());
+    }
+    session.focusScore = session.durationMs > 0
+      ? Math.round((session.focusedMs / session.durationMs) * 100)
+      : 0;
+
+    await session.save();
+    return res.json({ success: true, focusScore: session.focusScore });
+  } catch (err) {
+    console.error('[focus/webcam/end] error', err);
+    return res.status(500).json({ error: 'Failed to end webcam focus session' });
+  }
+});
+
+router.get('/focus/webcam/summary/:pathId', async (req, res) => {
+  try {
+    const { pathId } = req.params;
+    const userObjectId = mongoose.Types.ObjectId.isValid(req.user.id)
+      ? new mongoose.Types.ObjectId(req.user.id)
+      : null;
+
+    const path = await LearningPath.findOne({ _id: pathId, userId: req.user.id }).select('_id');
+    if (!path) return res.status(404).json({ error: 'Learning path not found' });
+
+    const [aggregate, latest] = await Promise.all([
+      WebcamFocusSession.aggregate([
+        { $match: { userId: userObjectId, learningPathId: path._id } },
+        {
+          $group: {
+            _id: null,
+            sessions: { $sum: 1 },
+            focusedMs: { $sum: '$focusedMs' },
+            awayMs: { $sum: '$awayMs' },
+            avgFocusScore: { $avg: '$focusScore' }
+          }
+        }
+      ]),
+      WebcamFocusSession.findOne({ userId: req.user.id, learningPathId: path._id })
+        .sort({ updatedAt: -1 })
+        .select('latestFaceDetected latestHeadYaw latestHeadPitch latestEyesOpenProb latestBlinkClosureMs awayMs')
+    ]);
+
+    const summary = aggregate[0] || { sessions: 0, focusedMs: 0, awayMs: 0, avgFocusScore: 0 };
+
+    return res.json({
+      sessions: summary.sessions || 0,
+      focusedMinutes: Math.round((summary.focusedMs || 0) / 60000),
+      awayMinutes: Math.round((summary.awayMs || 0) / 60000),
+      avgFocusScore: Math.round(summary.avgFocusScore || 0),
+      latest: latest
+        ? {
+          faceDetected: latest.latestFaceDetected,
+          headYaw: latest.latestHeadYaw || 0,
+          headPitch: latest.latestHeadPitch || 0,
+          eyesOpenProb: latest.latestEyesOpenProb || 0,
+          blinkClosureMs: latest.latestBlinkClosureMs || 0,
+          awayMs: latest.awayMs || 0
+        }
+        : null
+    });
+  } catch (err) {
+    console.error('[focus/webcam/summary] error', err);
+    return res.status(500).json({ error: 'Failed to fetch webcam focus summary' });
   }
 });
 
