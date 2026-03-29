@@ -1,6 +1,6 @@
 # Codecrafters Learning Platform
 
-A full-stack AI learning companion combining personalized learning paths, a RAG-powered chat workspace, auto-generated quizzes/flashcards/flowcharts, and YouTube transcript Q&A. Screenshots live in `frontend/apps/web/public`.
+A full-stack AI learning companion combining personalized learning paths, a RAG-powered chat workspace, auto-generated quizzes/flashcards/flowcharts, and YouTube transcript Q&A. Screenshots live in `codecrafters-3.0/frontend/apps/web/public`.
 
 ## Feature tour
 
@@ -8,32 +8,32 @@ A full-stack AI learning companion combining personalized learning paths, a RAG-
 - Snapshot of streak, learning progress, quizzes completed, average score, and chosen topics.
 - Activity trends and most recent actions help learners stay on track.
 - Screenshots:
-  - ![Dashboard overview](frontend/apps/web/public/dash.png)
-  - ![Progress and activity trends](frontend/apps/web/public/dash2.png)
+  - ![Dashboard overview](codecrafters-3.0/frontend/apps/web/public/dash.png)
+  - ![Progress and activity trends](codecrafters-3.0/frontend/apps/web/public/dash2.png)
 
 ### Learning paths
 - Topic selection with per-topic stats and progress tracking.
 - Detailed, prerequisite-aware roadmaps laid out in priority order.
 - Content hub with resources and embedded videos per roadmap topic.
 - Screenshots (in order):
-  - ![Learning topics](frontend/apps/web/public/lern.png)
-  - ![Roadmap detail part 1](frontend/apps/web/public/lern2.png)
-  - ![Roadmap detail part 2](frontend/apps/web/public/lern3.png)
-  - ![Topic content and videos](frontend/apps/web/public/lern4.png)
+  - ![Learning topics](codecrafters-3.0/frontend/apps/web/public/lern.png)
+  - ![Roadmap detail part 1](codecrafters-3.0/frontend/apps/web/public/lern2.png)
+  - ![Roadmap detail part 2](codecrafters-3.0/frontend/apps/web/public/lern3.png)
+  - ![Topic content and videos](codecrafters-3.0/frontend/apps/web/public/lern4.png)
 
 ### RAG workspace
 - Upload documents and chat with grounded answers (ANN vector search + Gemini embeddings).
 - Generates quizzes, flowcharts, flashcards, and last-minute revision notes from the same context.
 - Screenshots (top to bottom):
-  - ![RAG chat](frontend/apps/web/public/chat.png)
-  - ![Quiz from chat](frontend/apps/web/public/quiz%20based%20on%20chat.png)
-  - ![Flowchart from chat](frontend/apps/web/public/flow%20based%20on%20chat.png)
-  - ![Flashcards from chat](frontend/apps/web/public/flash%20based%20on%20chat.png)
-  - ![Last-minute revision](frontend/apps/web/public/last%20minute%20revision%20based%20on%20chat.png)
+  - ![RAG chat](codecrafters-3.0/frontend/apps/web/public/chat.png)
+  - ![Quiz from chat](codecrafters-3.0/frontend/apps/web/public/quiz%20based%20on%20chat.png)
+  - ![Flowchart from chat](codecrafters-3.0/frontend/apps/web/public/flow%20based%20on%20chat.png)
+  - ![Flashcards from chat](codecrafters-3.0/frontend/apps/web/public/flash%20based%20on%20chat.png)
+  - ![Last-minute revision](codecrafters-3.0/frontend/apps/web/public/last%20minute%20revision%20based%20on%20chat.png)
 
 ### YouTube transcript Q&A
 - Paste a YouTube link, fetch the transcript, ground AI answers on it, and suggest similar videos.
-- Screenshot: ![Transcript Q&A](frontend/apps/web/public/transcript.jpeg)
+- Screenshot: ![Transcript Q&A](codecrafters-3.0/frontend/apps/web/public/transcript.jpeg)
 
 ## Architecture
 - **Frontend:** Next.js 16 (Turbopack), React 19, NextAuth, theme switching, Turborepo monorepo, shared UI package.
