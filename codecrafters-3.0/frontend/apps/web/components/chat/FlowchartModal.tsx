@@ -76,13 +76,16 @@ export function FlowchartModal({ open, flowchart, onClose }: Props) {
         </div>
 
         <div className="grid flex-1 min-h-0 grid-cols-1 gap-0 lg:grid-cols-[320px_1fr]">
-          <aside className="overflow-y-auto border-r border-border bg-muted/20 px-4 py-4">
+          <aside className="scrollbar-middle-panel overflow-y-auto border-r border-border bg-muted/20 px-4 py-4">
             <h3 className="mb-3 text-sm font-semibold">Flowchart Sequence</h3>
             <ol className="space-y-2 text-sm">
               {normalizedSteps.map((step, idx) => (
-                <li key={`${step}-${idx}`} className="rounded-lg border border-border bg-background px-3 py-2">
-                  <p className="text-xs font-semibold text-primary">Step {idx + 1}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-foreground/90">{step}</p>
+                <li
+                  key={`${step}-${idx}`}
+                  className="group rounded-lg border border-border/80 bg-background/85 px-3 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/10"
+                >
+                  <p className="text-xs font-semibold text-primary/90 transition-colors group-hover:text-primary">Step {idx + 1}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-foreground/90 transition-colors group-hover:text-foreground">{step}</p>
                 </li>
               ))}
             </ol>

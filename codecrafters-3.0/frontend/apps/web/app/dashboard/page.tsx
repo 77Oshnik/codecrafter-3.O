@@ -201,17 +201,17 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="mb-6">
-            <h1 className="text-xl font-semibold">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+      <div className="flex-1 overflow-y-auto px-4 pb-7 pt-4 md:px-6 md:pb-8">
+        <div className="mx-auto max-w-7xl space-y-7">
+          <div className="space-y-1.5">
+            <h1 className="font-heading text-3xl font-semibold leading-tight md:text-4xl">Welcome back</h1>
+            <p className="text-sm leading-relaxed text-muted-foreground md:text-base">
               Choose what you want to work on today.
             </p>
           </div>
 
           {summaryError ? (
-            <div className={`border rounded-xl p-3 text-xs ${
+            <div className={`rounded-2xl border px-4 py-3 text-sm ${
               summaryError.startsWith("Using fallback")
                 ? "border-amber-500/30 bg-amber-500/5 text-amber-700"
                 : "border-destructive/30 bg-destructive/5 text-destructive"
@@ -220,45 +220,45 @@ export default async function DashboardPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+          <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
+            <div className="surface-panel interactive-card rounded-2xl border border-border/70 bg-background/82 p-5">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Flame className="w-4 h-4 text-orange-500" />
                 Current Streak
               </div>
-              <p className="text-2xl font-semibold mt-2">{kpis?.streakDays ?? 0} days</p>
+              <p className="mt-2.5 text-3xl font-semibold leading-none">{kpis?.streakDays ?? 0} days</p>
             </div>
 
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <div className="surface-panel interactive-card rounded-2xl border border-border/70 bg-background/82 p-5">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Activity className="w-4 h-4 text-primary" />
                 Learning Progress
               </div>
-              <p className="text-2xl font-semibold mt-2">{kpis?.avgLearningProgress ?? 0}%</p>
+              <p className="mt-2.5 text-3xl font-semibold leading-none">{kpis?.avgLearningProgress ?? 0}%</p>
             </div>
 
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <div className="surface-panel interactive-card rounded-2xl border border-border/70 bg-background/82 p-5">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <BookOpen className="w-4 h-4 text-indigo-500" />
                 Quizzes Completed
               </div>
-              <p className="text-2xl font-semibold mt-2">{kpis?.totalQuizzes ?? 0}</p>
+              <p className="mt-2.5 text-3xl font-semibold leading-none">{kpis?.totalQuizzes ?? 0}</p>
             </div>
 
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <div className="surface-panel interactive-card rounded-2xl border border-border/70 bg-background/82 p-5">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Trophy className="w-4 h-4 text-emerald-500" />
                 Avg Quiz Score
               </div>
-              <p className="text-2xl font-semibold mt-2">{kpis?.avgQuizScore ?? 0}%</p>
+              <p className="mt-2.5 text-3xl font-semibold leading-none">{kpis?.avgQuizScore ?? 0}%</p>
             </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2 border border-border rounded-xl p-4 bg-background">
+            <div className="surface-panel lg:col-span-2 rounded-2xl border border-border/70 bg-background/82 p-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Learning Progress</p>
-                <span className="text-xs text-muted-foreground">
+                <p className="font-heading text-lg font-semibold">Learning Progress</p>
+                <span className="text-sm text-muted-foreground">
                   {learning?.activePaths ?? 0} active path{(learning?.activePaths ?? 0) === 1 ? "" : "s"}
                 </span>
               </div>
@@ -268,11 +268,11 @@ export default async function DashboardPage() {
                   <Link
                     key={path.id}
                     href={`/dashboard/learn/${path.id}`}
-                    className="block border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors"
+                    className="interactive-card block rounded-xl border border-border/70 bg-background/72 p-3.5 transition-colors hover:border-primary/35 hover:bg-muted/30"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium truncate">{path.topic}</p>
-                      <span className="text-xs text-muted-foreground">{path.overallProgress}%</span>
+                      <span className="rounded-full border border-border/70 bg-background/70 px-2 py-0.5 text-xs text-muted-foreground">{path.overallProgress}%</span>
                     </div>
                     <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                       <div
@@ -280,20 +280,20 @@ export default async function DashboardPage() {
                         style={{ width: `${Math.max(0, Math.min(100, path.overallProgress || 0))}%` }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {path.completedTopics}/{path.totalTopics} topics • {timeAgo(path.lastActiveAt)}
                     </p>
                   </Link>
                 ))}
                 {(learning?.paths || []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No learning paths yet.</p>
+                  <p className="rounded-xl border border-dashed border-border/70 bg-background/65 px-3 py-2 text-sm text-muted-foreground">No learning paths yet.</p>
                 ) : null}
               </div>
             </div>
 
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <p className="text-sm font-semibold">Today&apos;s Focus</p>
-              <div className="mt-3 space-y-2 text-sm">
+            <div className="surface-panel rounded-2xl border border-border/70 bg-background/82 p-5">
+              <p className="font-heading text-lg font-semibold">Today&apos;s Focus</p>
+              <div className="mt-3 space-y-2.5 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Due Reviews</span>
                   <span className="font-semibold">{learning?.dueToday ?? 0}</span>
@@ -323,7 +323,7 @@ export default async function DashboardPage() {
               {learning?.latestActivePath ? (
                 <Link
                   href={`/dashboard/learn/${learning.latestActivePath.id}`}
-                  className="mt-4 inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90"
+                  className="animated-button mt-5 inline-flex items-center gap-1 rounded-full border border-primary/45 bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                 >
                   Resume {learning.latestActivePath.topic}
                 </Link>
@@ -332,11 +332,11 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2 border border-border rounded-xl p-4 bg-background">
-              <p className="text-sm font-semibold">Progress & Activity Trends</p>
+            <div className="surface-panel lg:col-span-2 rounded-2xl border border-border/70 bg-background/82 p-5">
+              <p className="font-heading text-lg font-semibold">Progress & Activity Trends</p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div className="border border-border rounded-lg p-3">
-                  <p className="text-[11px] text-muted-foreground mb-2">Last 7 Days Activity</p>
+                <div className="rounded-xl border border-border/70 bg-background/70 p-3.5">
+                  <p className="mb-2 text-xs text-muted-foreground">Last 7 Days Activity</p>
                   <div className="h-24 flex items-end gap-2">
                     {activityBars.map((bar) => {
                       const height = Math.max(8, Math.round((bar.count / maxDailyActivity) * 72))
@@ -354,8 +354,8 @@ export default async function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="border border-border rounded-lg p-3">
-                  <p className="text-[11px] text-muted-foreground mb-2">Recent Quiz Scores</p>
+                <div className="rounded-xl border border-border/70 bg-background/70 p-3.5">
+                  <p className="mb-2 text-xs text-muted-foreground">Recent Quiz Scores</p>
                   <div className="space-y-1.5">
                     {recentQuizScores.length > 0 ? recentQuizScores.map((quiz, idx) => (
                       <div key={`${quiz.createdAt}-${idx}`} className="space-y-1">
@@ -378,28 +378,28 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <p className="text-sm font-semibold">Quick Actions</p>
+            <div className="surface-panel rounded-2xl border border-border/70 bg-background/82 p-5">
+              <p className="font-heading text-lg font-semibold">Quick Actions</p>
               <div className="mt-3 space-y-2">
                 <Link
                   href="/dashboard/chat"
-                  className="flex items-center justify-between border border-border rounded-lg p-2.5 hover:bg-muted/30 transition-colors"
+                  className="interactive-card flex items-center justify-between rounded-xl border border-border/70 bg-background/70 p-3 text-sm transition-colors hover:border-primary/35 hover:bg-muted/30"
                 >
-                  <span className="text-xs font-medium">Open Chat Workspace</span>
+                  <span className="font-medium">Open Chat Workspace</span>
                   <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
                 </Link>
                 <Link
                   href="/dashboard/learn"
-                  className="flex items-center justify-between border border-border rounded-lg p-2.5 hover:bg-muted/30 transition-colors"
+                  className="interactive-card flex items-center justify-between rounded-xl border border-border/70 bg-background/70 p-3 text-sm transition-colors hover:border-primary/35 hover:bg-muted/30"
                 >
-                  <span className="text-xs font-medium">Go To Learning Paths</span>
+                  <span className="font-medium">Go To Learning Paths</span>
                   <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
                 </Link>
                 <Link
                   href="/dashboard/youtube"
-                  className="flex items-center justify-between border border-border rounded-lg p-2.5 hover:bg-muted/30 transition-colors"
+                  className="interactive-card flex items-center justify-between rounded-xl border border-border/70 bg-background/70 p-3 text-sm transition-colors hover:border-primary/35 hover:bg-muted/30"
                 >
-                  <span className="text-xs font-medium">Open YouTube Learn</span>
+                  <span className="font-medium">Open YouTube Learn</span>
                   <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
                 </Link>
               </div>
@@ -407,17 +407,17 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2 border border-border rounded-xl p-4 bg-background">
-              <p className="text-sm font-semibold">Recent Activity</p>
+            <div className="surface-panel lg:col-span-2 rounded-2xl border border-border/70 bg-background/82 p-5">
+              <p className="font-heading text-lg font-semibold">Recent Activity</p>
 
               <div className="mt-3 space-y-2">
                 {recentActivityTop.map((item, idx) => (
-                  <div key={`${item.type}-${idx}-${item.createdAt}`} className="flex items-center justify-between gap-2 text-xs border border-border rounded-lg p-2.5">
+                  <div key={`${item.type}-${idx}-${item.createdAt}`} className="interactive-card flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/70 p-3 text-sm">
                     <div className="min-w-0">
                       <p className="font-medium truncate">{item.title}</p>
-                      <p className="text-muted-foreground capitalize">{item.type}</p>
+                      <p className="text-xs capitalize text-muted-foreground">{item.type}</p>
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="shrink-0 text-right">
                       {typeof item.score === "number" ? (
                         <p className="font-semibold">{item.score}%</p>
                       ) : item.status ? (
@@ -425,30 +425,30 @@ export default async function DashboardPage() {
                       ) : (
                         <CheckCircle className="w-4 h-4 text-primary" />
                       )}
-                      <p className="text-muted-foreground">{timeAgo(item.createdAt)}</p>
+                      <p className="text-xs text-muted-foreground">{timeAgo(item.createdAt)}</p>
                     </div>
                   </div>
                 ))}
                 {recentActivityTop.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No recent activity yet.</p>
+                  <p className="rounded-xl border border-dashed border-border/70 bg-background/65 px-3 py-2 text-sm text-muted-foreground">No recent activity yet.</p>
                 ) : null}
               </div>
             </div>
 
-            <div className="border border-border rounded-xl p-4 bg-background">
-              <p className="text-sm font-semibold">Activity Snapshot</p>
+            <div className="surface-panel rounded-2xl border border-border/70 bg-background/82 p-5">
+              <p className="font-heading text-lg font-semibold">Activity Snapshot</p>
               <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between text-xs border border-border rounded-lg p-2.5">
+                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background/70 p-3 text-sm">
                   <span className="text-muted-foreground">Total Activities (7d)</span>
                   <span className="font-semibold">{activityBars.reduce((sum, x) => sum + x.count, 0)}</span>
                 </div>
-                <div className="flex items-center justify-between text-xs border border-border rounded-lg p-2.5">
+                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background/70 p-3 text-sm">
                   <span className="text-muted-foreground">Most Active Day</span>
                   <span className="font-semibold">
                     {activityBars.reduce((best, cur) => (cur.count > best.count ? cur : best), activityBars[0] || { label: "-", count: 0 }).label}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs border border-border rounded-lg p-2.5">
+                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background/70 p-3 text-sm">
                   <span className="text-muted-foreground">Best Recent Quiz</span>
                   <span className="font-semibold">
                     {recentQuizScores.length > 0
@@ -463,42 +463,42 @@ export default async function DashboardPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Link
               href="/dashboard/chat"
-              className="group border border-border rounded-xl p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+              className="surface-panel interactive-card group rounded-2xl border border-border/70 bg-background/82 p-5 transition-colors hover:border-primary/40 hover:bg-primary/8"
             >
               <div className="flex items-start justify-between">
                 <MessageSquare className="w-5 h-5 text-primary" />
                 <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
-              <p className="text-sm font-semibold mt-3">Chat Workspace</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-3 text-base font-semibold">Chat Workspace</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Ask questions, upload docs, and use study tools.
               </p>
             </Link>
 
             <Link
               href="/dashboard/learn"
-              className="group border border-border rounded-xl p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+              className="surface-panel interactive-card group rounded-2xl border border-border/70 bg-background/82 p-5 transition-colors hover:border-primary/40 hover:bg-primary/8"
             >
               <div className="flex items-start justify-between">
                 <Brain className="w-5 h-5 text-primary" />
                 <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
-              <p className="text-sm font-semibold mt-3">Learning Paths</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-3 text-base font-semibold">Learning Paths</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Personalized roadmap, adaptive quizzes, and revision loops.
               </p>
             </Link>
 
             <Link
               href="/dashboard/youtube"
-              className="group border border-border rounded-xl p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+              className="surface-panel interactive-card group rounded-2xl border border-border/70 bg-background/82 p-5 transition-colors hover:border-primary/40 hover:bg-primary/8"
             >
               <div className="flex items-start justify-between">
                 <Play className="w-5 h-5 text-primary" />
                 <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
-              <p className="text-sm font-semibold mt-3">YouTube Learn</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-3 text-base font-semibold">YouTube Learn</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Learn from video transcripts with AI summaries and notes.
               </p>
             </Link>

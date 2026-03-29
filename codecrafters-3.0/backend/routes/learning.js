@@ -17,7 +17,8 @@ const {
   calculateNextReview,
   getAdaptedLevel,
   ensureRevisionSubtopic,
-  calculateProgress
+  calculateProgress,
+  normalizeLearningLevel
 } = require('../services/learningService');
 
 // All routes require authentication
@@ -93,7 +94,7 @@ router.post('/assessment/:id/submit', async (req, res) => {
     const classification = await classifyUserLevel(
       assessment.topic, score, easyCorrect, mediumCorrect, hardCorrect
     );
-    const level = classification.level || 'beginner';
+    const level = normalizeLearningLevel(classification.level, 'beginner');
 
     // Generate personalized roadmap
     const roadmapTopics = await generateRoadmap(

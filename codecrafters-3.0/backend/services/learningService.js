@@ -57,6 +57,64 @@ function extractJSON(text) {
   return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
 }
 
+function normalizeLearningLevel(value, fallback = 'beginner') {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (['beginner', 'intermediate', 'advanced'].includes(normalized)) {
+    return normalized;
+  }
+
+  if (['expert', 'pro', 'professional', 'master'].includes(normalized)) {
+    return 'advanced';
+  }
+
+  if (['novice', 'starter', 'newbie', 'basic'].includes(normalized)) {
+    return 'beginner';
+  }
+
+  if (['mid', 'mid-level', 'medium'].includes(normalized)) {
+    return 'intermediate';
+  }
+
+  return ['beginner', 'intermediate', 'advanced'].includes(fallback)
+    ? fallback
+    : 'beginner';
+}
+
+function normalizeRoadmapTopics(topics, learnerLevel = 'beginner') {
+  if (!Array.isArray(topics)) return [];
+
+  const safeLearnerLevel = normalizeLearningLevel(learnerLevel, 'beginner');
+
+  return topics
+    .map((topic, index) => {
+      const subtopics = Array.isArray(topic?.subtopics)
+        ? topic.subtopics
+          .map((subtopic, subIndex) => ({
+            id: String(subtopic?.id || `topic-${index + 1}-sub-${subIndex + 1}`),
+            title: String(subtopic?.title || `Subtopic ${subIndex + 1}`),
+            description: String(subtopic?.description || '').trim()
+          }))
+          .filter((subtopic) => subtopic.title)
+        : [];
+
+      const difficulty = normalizeLearningLevel(topic?.difficulty, safeLearnerLevel);
+
+      return {
+        id: String(topic?.id || `topic-${index + 1}`),
+        title: String(topic?.title || `Topic ${index + 1}`),
+        description: String(topic?.description || '').trim(),
+        order: Number.isFinite(Number(topic?.order)) ? Number(topic.order) : index + 1,
+        difficulty,
+        estimatedTime: String(topic?.estimatedTime || '2-3 hours'),
+        subtopics: subtopics.length
+          ? subtopics
+          : [{ id: `topic-${index + 1}-sub-1`, title: 'Core Concept', description: '' }]
+      };
+    })
+    .filter((topic) => topic.title);
+}
+
 function normalizeQuizQuestions(questions) {
   if (!Array.isArray(questions)) return [];
 
@@ -658,23 +716,29 @@ Classification rules:
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();
-  return extractJSON(text);
+  const parsed = extractJSON(text);
+
+  return {
+    ...parsed,
+    level: normalizeLearningLevel(parsed?.level, score >= 75 ? 'advanced' : score >= 40 ? 'intermediate' : 'beginner')
+  };
 }
 
 // ─── Roadmap Generation ───────────────────────────────────────────────────────
 
 async function generateRoadmap(topic, level, weaknesses = []) {
+  const normalizedLevel = normalizeLearningLevel(level, 'beginner');
   const weaknessNote = weaknesses.length > 0
     ? `\nThe user's weak areas: ${weaknesses.join(', ')}. Include dedicated topics for these.`
     : '';
 
-  const prompt = `Create a personalized learning roadmap for a ${level} learner who wants to study "${topic}".${weaknessNote}
+  const prompt = `Create a personalized learning roadmap for a ${normalizedLevel} learner who wants to study "${topic}".${weaknessNote}
 
 Requirements:
 - 8 to 12 main topics, ordered from foundational to advanced
 - Each topic has 3 to 5 subtopics
 - Topics should be sequential, each building on the previous
-- Appropriate for a ${level} level learner
+- Appropriate for a ${normalizedLevel} level learner
 
 Return ONLY a valid JSON object, no other text:
 {
@@ -705,7 +769,7 @@ Return ONLY a valid JSON object, no other text:
     throw new Error('Invalid roadmap generated');
   }
 
-  return parsed.topics;
+  return normalizeRoadmapTopics(parsed.topics, normalizedLevel);
 }
 
 // ─── Topic Content Generation ─────────────────────────────────────────────────
@@ -951,5 +1015,6 @@ module.exports = {
   getAdaptedLevel,
   createRevisionSubtopic,
   ensureRevisionSubtopic,
-  calculateProgress
+  calculateProgress,
+  normalizeLearningLevel
 };
