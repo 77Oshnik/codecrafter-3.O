@@ -23,7 +23,7 @@ export default async function YoutubePage({ searchParams }: PageProps) {
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </Link>
-          <span className="text-sm font-semibold">CodeCrafter</span>
+          <span className="text-sm font-semibold">NeuroTrack </span>
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <PlayCircle className="h-3.5 w-3.5" />
             / YouTube Learn

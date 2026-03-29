@@ -11,7 +11,7 @@ export default async function LandingPage() {
     <div className="min-h-svh bg-background flex flex-col">
       {/* Nav */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border max-w-6xl mx-auto w-full">
-        <span className="font-bold text-lg tracking-tight">CodeCrafter</span>
+        <span className="font-bold text-lg tracking-tight">NeuroTrack </span>
         <div className="flex items-center gap-3">
           <Link
             href="/login"
@@ -42,7 +42,7 @@ export default async function LandingPage() {
         </h1>
 
         <p className="text-base sm:text-lg text-muted-foreground max-w-xl mb-10 leading-relaxed">
-          Upload PDFs and ask questions in plain English. CodeCrafter uses RAG to retrieve the
+          Upload PDFs and ask questions in plain English. NeuroTrack uses RAG to retrieve the
           most relevant passages and generate accurate, cited answers — instantly.
         </p>
 
@@ -95,7 +95,7 @@ export default async function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-6 px-6 text-center text-xs text-muted-foreground">
-        &copy; {new Date().getFullYear()} CodeCrafter
+        &copy; {new Date().getFullYear()} NeuroTrack
       </footer>
     </div>
   )

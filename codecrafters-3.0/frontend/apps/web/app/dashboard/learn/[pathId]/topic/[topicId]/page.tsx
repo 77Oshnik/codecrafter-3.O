@@ -407,27 +407,7 @@ function TopicPageInner() {
                 </ReactMarkdown>
               </article>
 
-              {/* YouTube search */}
-              {content.youtubeSearchQuery && (
-                <div className="mt-6 border border-border rounded-xl p-4 bg-muted/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <BookOpen className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-xs font-medium">Find Video Resources</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Search YouTube for related tutorials and explanations.
-                  </p>
-                  <a
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(content.youtubeSearchQuery)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
-                  >
-                    <Search className="w-3.5 h-3.5" />
-                    Search: &quot;{content.youtubeSearchQuery}&quot;
-                  </a>
-                </div>
-              )}
+              
 
               {/* Take quiz CTA */}
               <div className="mt-6 p-4 border border-primary/20 rounded-xl bg-primary/5 text-center">

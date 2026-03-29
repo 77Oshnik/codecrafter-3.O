@@ -12,7 +12,7 @@ export default async function LearnLayout({ children }: { children: ReactNode })
       {/* Top nav - shared across all learn pages */}
       <header className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background z-10 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">CodeCrafter</span>
+          <span className="text-sm font-semibold">NeuroTrack </span>
           <span className="text-xs text-muted-foreground">/ Learn</span>
           <Link
             href="/dashboard/chat"
