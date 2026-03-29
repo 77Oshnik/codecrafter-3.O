@@ -9,7 +9,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <SessionProvider session={session}>
-      <div className="flex h-svh w-full overflow-hidden bg-background">{children}</div>
+      <div className="flex min-h-svh w-full bg-background overflow-y-auto">{children}</div>
     </SessionProvider>
   )
 }

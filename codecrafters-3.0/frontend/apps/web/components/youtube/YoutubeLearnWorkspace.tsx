@@ -1,494 +1,264 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { useSession } from "next-auth/react"
+import { useState } from "react"
+import { AlertCircle, Link2, Loader2, NotebookPen, PlayCircle, Sparkles } from "lucide-react"
 import {
-  Download,
-  ExternalLink,
-  FileText,
-  Link2,
-  Loader2,
-  NotebookPen,
-  PlayCircle,
-  Sparkles,
-  Trash2,
-  Video,
-} from "lucide-react"
-import { MessageList } from "@/components/chat/MessageList"
-import { MessageInput } from "@/components/chat/MessageInput"
-import {
-  createConversation,
-  deleteYouTubeVideo,
-  generateYouTubeNotes,
-  generateYouTubeSummary,
-  getConversation,
-  ingestYouTubeVideo,
-  listYouTubeVideos,
-  sendMessage,
-  type Message,
-  type YouTubeVideoItem,
+  askTranscriptQuestion,
+  fetchTranscript,
+  summarizeTranscript,
+  type TranscriptChatMessage,
+  type TranscriptResponse,
 } from "@/lib/api"
+import { extractYouTubeVideoId } from "@/lib/youtube"
 
 interface Props {
   initialConversationId?: string
 }
 
-function extractYouTubeVideoId(input: string): string | null {
-  const value = input.trim()
-  if (!value) return null
+export function YoutubeLearnWorkspace(_: Props) {
+  const [transcriptUrl, setTranscriptUrl] = useState("")
+  const [transcriptResult, setTranscriptResult] = useState<TranscriptResponse | null>(null)
+  const [isFetchingTranscript, setIsFetchingTranscript] = useState(false)
+  const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [transcriptSummary, setTranscriptSummary] = useState<string | null>(null)
+  const [isSummarizingTranscript, setIsSummarizingTranscript] = useState(false)
+  const [transcriptChat, setTranscriptChat] = useState<(TranscriptChatMessage & { related?: boolean })[]>([])
+  const [transcriptQuestion, setTranscriptQuestion] = useState("")
+  const [isTranscriptAnswering, setIsTranscriptAnswering] = useState(false)
+  const transcriptWordCount = transcriptResult?.fullText
+    ? transcriptResult.fullText.split(/\s+/).filter(Boolean).length
+    : 0
 
-  try {
-    const url = new URL(value)
-    const host = url.hostname.replace(/^www\./, "")
-
-    if (host === "youtu.be") {
-      const id = url.pathname.split("/").filter(Boolean)[0]
-      return id?.slice(0, 20) ?? null
-    }
-
-    if (host === "youtube.com" || host === "m.youtube.com") {
-      if (url.pathname === "/watch") {
-        const v = url.searchParams.get("v")
-        return v?.slice(0, 20) ?? null
-      }
-
-      const parts = url.pathname.split("/").filter(Boolean)
-      if (parts[0] === "shorts" || parts[0] === "embed") {
-        return parts[1]?.slice(0, 20) ?? null
-      }
-    }
-  } catch {
-    return null
-  }
-
-  return null
-}
-
-export function YoutubeLearnWorkspace({ initialConversationId }: Props) {
-  const { data: session } = useSession()
-  const token = session?.user?.backendToken ?? ""
-
-  const [conversationId, setConversationId] = useState<string | null>(initialConversationId ?? null)
-  const [url, setUrl] = useState("")
-  const [videos, setVideos] = useState<YouTubeVideoItem[]>([])
-  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [isLoadingChat, setIsLoadingChat] = useState(false)
-  const [isIngesting, setIsIngesting] = useState(false)
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
-  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false)
-  const [previewDialog, setPreviewDialog] = useState<
-    null | { kind: "summary" | "notes"; title: string; content: string }
-  >(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const canAttach = useMemo(() => Boolean(token), [token])
-
-  const selectedVideo = useMemo(
-    () => videos.find((item) => item.id === selectedVideoId) ?? null,
-    [videos, selectedVideoId]
-  )
-
-  const downloadMarkdown = useCallback((content: string, fileName: string) => {
-    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" })
-    const link = document.createElement("a")
-    link.href = URL.createObjectURL(blob)
-    link.download = fileName
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(link.href)
-  }, [])
-
-  const loadConversationMessages = useCallback(
-    async (convId: string) => {
-      if (!token) return
-      try {
-        const conversation = await getConversation(token, convId)
-        setMessages(conversation.messages)
-      } catch (e) {
-        setError((e as Error).message)
-      }
-    },
-    [token]
-  )
-
-  const loadVideos = useCallback(
-    async (convId: string) => {
-      if (!token) return
-      try {
-        const items = await listYouTubeVideos(token, convId)
-        setVideos(items)
-        if (items.length > 0 && !selectedVideoId) {
-          setSelectedVideoId(items[0]!.id)
-        } else if (selectedVideoId && !items.some((v) => v.id === selectedVideoId)) {
-          setSelectedVideoId(items[0]?.id ?? null)
-        }
-      } catch (e) {
-        setError((e as Error).message)
-      }
-    },
-    [token, selectedVideoId]
-  )
-
-  useEffect(() => {
-    if (!token || !conversationId) return
-    void loadConversationMessages(conversationId)
-    void loadVideos(conversationId)
-  }, [token, conversationId, loadConversationMessages, loadVideos])
-
-  async function handleAttach() {
-    if (!token) return
-
-    const id = extractYouTubeVideoId(url)
-    if (!id) {
-      setError("Enter a valid YouTube URL (watch, youtu.be, shorts, or embed).")
+  async function handleFetchTranscript() {
+    const videoId = extractYouTubeVideoId(transcriptUrl)
+    if (!videoId) {
+      setTranscriptError("Enter a valid YouTube URL (watch, youtu.be, shorts, or embed).")
+      setTranscriptResult(null)
       return
     }
 
-    setIsIngesting(true)
-    setError(null)
+    setIsFetchingTranscript(true)
+    setTranscriptError(null)
 
     try {
-      let convId = conversationId
-      if (!convId) {
-        const created = await createConversation(token, "YouTube Learn")
-        convId = created._id
-        setConversationId(created._id)
-      }
-
-      const { video } = await ingestYouTubeVideo(token, {
-        conversationId: convId,
-        url: url.trim(),
-      })
-
-      setSelectedVideoId(video.id)
-      setUrl("")
-      await loadVideos(convId)
+      const result = await fetchTranscript({ youtubeUrl: transcriptUrl.trim() })
+      setTranscriptResult(result)
+      setTranscriptSummary(null)
+      setTranscriptChat([])
+      setTranscriptQuestion("")
     } catch (e) {
-      setError((e as Error).message)
+      setTranscriptResult(null)
+      setTranscriptError((e as Error).message)
     } finally {
-      setIsIngesting(false)
+      setIsFetchingTranscript(false)
     }
   }
 
-  const handleSendMessage = useCallback(
-    async (text: string) => {
-      if (!token || !conversationId || !selectedVideo || isLoadingChat) return
-
-      const userMsg: Message = { role: "user", content: text }
-      setMessages((prev) => [...prev, userMsg])
-      setIsLoadingChat(true)
-      setError(null)
-
-      try {
-        const result = await sendMessage(token, conversationId, text, {
-          videoId: selectedVideo.videoId,
-        })
-        setMessages((prev) => [...prev, result.message])
-      } catch (e) {
-        setError((e as Error).message)
-        setMessages((prev) => prev.slice(0, -1))
-      } finally {
-        setIsLoadingChat(false)
-      }
-    },
-    [token, conversationId, selectedVideo, isLoadingChat]
-  )
-
-  const handleGenerateSummary = useCallback(async () => {
-    if (!token || !selectedVideo) return
-    setIsGeneratingSummary(true)
-    setError(null)
-    try {
-      const { summary } = await generateYouTubeSummary(token, selectedVideo.id)
-      setPreviewDialog({ kind: "summary", title: selectedVideo.title, content: summary })
-      if (conversationId) await loadVideos(conversationId)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setIsGeneratingSummary(false)
+  async function handleSummarizeTranscript() {
+    if (!transcriptResult?.fullText) {
+      setTranscriptError("Fetch a transcript first.")
+      return
     }
-  }, [token, selectedVideo, conversationId, loadVideos])
 
-  const handleGenerateNotes = useCallback(async () => {
-    if (!token || !selectedVideo) return
-    setIsGeneratingNotes(true)
-    setError(null)
+    setIsSummarizingTranscript(true)
+    setTranscriptError(null)
+
     try {
-      const { notes } = await generateYouTubeNotes(token, selectedVideo.id)
-      setPreviewDialog({ kind: "notes", title: selectedVideo.title, content: notes })
-      if (conversationId) await loadVideos(conversationId)
+      const { summary } = await summarizeTranscript({
+        transcript: transcriptResult.fullText,
+        title: transcriptResult.title,
+      })
+      setTranscriptSummary(summary)
     } catch (e) {
-      setError((e as Error).message)
+      setTranscriptError((e as Error).message)
     } finally {
-      setIsGeneratingNotes(false)
+      setIsSummarizingTranscript(false)
     }
-  }, [token, selectedVideo, conversationId, loadVideos])
+  }
 
-  const handleDeleteVideo = useCallback(
-    async (id: string) => {
-      if (!token || !conversationId) return
-      try {
-        await deleteYouTubeVideo(token, id)
-        await loadVideos(conversationId)
-      } catch (e) {
-        setError((e as Error).message)
-      }
-    },
-    [token, conversationId, loadVideos]
-  )
+  async function handleTranscriptAsk() {
+    if (!transcriptResult?.fullText) {
+      setTranscriptError("Fetch a transcript first.")
+      return
+    }
 
-  const videoDraft = useMemo(() => {
-    if (!selectedVideo) return null
-    return { url: selectedVideo.url, videoId: selectedVideo.videoId }
-  }, [selectedVideo])
+    const question = transcriptQuestion.trim()
+    if (!question) {
+      setTranscriptError("Enter a question about the transcript.")
+      return
+    }
 
-  const canChat = Boolean(token && conversationId && selectedVideo && selectedVideo.status === "ready")
+    const userMsg: TranscriptChatMessage = { role: "user", content: question }
+    setTranscriptChat((prev) => [...prev, userMsg])
+    setTranscriptQuestion("")
+    setIsTranscriptAnswering(true)
+    setTranscriptError(null)
+
+    try {
+      const history = [...transcriptChat, userMsg].map((m) => ({ role: m.role, content: m.content }))
+      const { answer, related } = await askTranscriptQuestion({
+        transcript: transcriptResult.fullText,
+        question,
+        history,
+      })
+
+      const cleanedAnswer = answer
+        .replace(/^AI\s*\n?/i, "") // drop leading model tag if present
+        .trim()
+
+      setTranscriptChat((prev) => [...prev, { role: "assistant", content: cleanedAnswer, related }])
+    } catch (e) {
+      setTranscriptError((e as Error).message)
+      setTranscriptChat((prev) => prev.slice(0, -1))
+    } finally {
+      setIsTranscriptAnswering(false)
+    }
+  }
 
   function formatPreviewFileName(kind: "summary" | "notes", title: string) {
     const safe = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
     return `${kind}-${safe || "youtube-video"}.md`
   }
-
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 overflow-hidden px-4 py-4 md:px-6">
-      <div className="rounded-2xl border border-border bg-muted/20 p-4">
-        <h1 className="text-lg font-semibold">YouTube Learning Workspace</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Paste a YouTube link, ingest the transcript, chat with the selected video, and generate notes/summary.
-        </p>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
-          {error}
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-4 md:px-6">
+      <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div className="border-b border-border bg-muted/30 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <PlayCircle className="h-4 w-4 text-primary" />
+            <div>
+              <p className="text-sm font-semibold">YouTube Transcript Assistant</p>
+              <p className="text-xs text-muted-foreground">Fetch transcript, summarize, and ask questions with Gemini.</p>
+            </div>
+          </div>
         </div>
-      )}
 
-      {!canAttach ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-          Session is not ready yet. Please refresh or sign in again.
-        </div>
-      ) : null}
-
-      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[360px,1fr]">
-        <section className="min-h-0 overflow-y-auto rounded-2xl border border-border bg-background p-4">
-          <label className="mb-2 block text-xs font-medium text-muted-foreground">YouTube video URL</label>
-          <div className="flex flex-col gap-2">
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary"
-            />
+        <div className="space-y-4 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:gap-4">
+            <div className="flex-1 space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground">YouTube link</label>
+              <input
+                value={transcriptUrl}
+                onChange={(e) => setTranscriptUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="h-10 w-full rounded-lg border border-border bg-muted/20 px-3 text-sm outline-none transition-colors focus:border-primary"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Paste any YouTube URL (watch, youtu.be, shorts, embed). We will only use the transcript.
+              </p>
+            </div>
             <button
               type="button"
-              onClick={() => void handleAttach()}
-              disabled={!canAttach || isIngesting}
+              onClick={() => void handleFetchTranscript()}
+              disabled={isFetchingTranscript}
               className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-4 text-sm transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isIngesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-              {isIngesting ? "Ingesting..." : "Attach video"}
+              {isFetchingTranscript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              {isFetchingTranscript ? "Fetching..." : "Fetch transcript"}
             </button>
           </div>
 
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="mb-2 flex items-center gap-2">
-              <PlayCircle className="h-4 w-4 text-primary" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Videos</p>
+          {transcriptError && (
+            <div className="inline-flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <AlertCircle className="mt-[2px] h-3.5 w-3.5" />
+              <span>{transcriptError}</span>
             </div>
+          )}
 
-            {videos.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                No videos yet. Paste and attach a YouTube link.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {videos.map((item) => {
-                  const isSelected = selectedVideoId === item.id
-                  return (
-                    <div
-                      key={item.id}
-                      className={`rounded-lg border px-3 py-2 ${isSelected ? "border-primary bg-primary/5" : "border-border bg-muted/30"}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedVideoId(item.id)}
-                        className="w-full text-left"
-                      >
-                        <p className="line-clamp-2 text-xs font-medium">{item.title}</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {item.status} • {item.chunkCount} chunks
-                        </p>
-                      </button>
-
-                      <div className="mt-2 flex items-center justify-between">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] text-primary underline hover:no-underline"
-                        >
-                          Open
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteVideo(item.id)}
-                          className="inline-flex items-center gap-1 text-[11px] text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Video className="h-4 w-4 text-primary" />
-              <p className="text-sm font-semibold">Selected video</p>
-            </div>
-
-            {videoDraft ? (
-              <div className="space-y-2 text-sm">
-                <p className="break-all text-muted-foreground">{videoDraft.url}</p>
-                <p className="text-xs text-muted-foreground">Video ID: {videoDraft.videoId}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No video selected.</p>
-            )}
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => void handleGenerateSummary()}
-                disabled={!selectedVideo || selectedVideo.status !== "ready" || isGeneratingSummary}
-                className="inline-flex items-center justify-center gap-1 rounded-lg border border-border px-2 py-2 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isGeneratingSummary ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Summary
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleGenerateNotes()}
-                disabled={!selectedVideo || selectedVideo.status !== "ready" || isGeneratingNotes}
-                className="inline-flex items-center justify-center gap-1 rounded-lg border border-border px-2 py-2 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isGeneratingNotes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <NotebookPen className="h-3.5 w-3.5" />}
-                Notes
-              </button>
-            </div>
-
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  selectedVideo?.summary
-                    ? downloadMarkdown(
-                        selectedVideo.summary,
-                        formatPreviewFileName("summary", selectedVideo.title)
-                      )
-                    : null
-                }
-                disabled={!selectedVideo?.summary}
-                className="inline-flex items-center justify-center gap-1 rounded-lg border border-border px-2 py-2 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Summary file
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  selectedVideo?.notes
-                    ? downloadMarkdown(
-                        selectedVideo.notes,
-                        formatPreviewFileName("notes", selectedVideo.title)
-                      )
-                    : null
-                }
-                disabled={!selectedVideo?.notes}
-                className="inline-flex items-center justify-center gap-1 rounded-lg border border-border px-2 py-2 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Notes file
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-background">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-sm font-semibold">Chat with selected video</p>
-            <p className="text-xs text-muted-foreground">
-              Answers are scoped to the selected YouTube transcript.
-            </p>
-          </div>
-
-          <MessageList messages={messages} isLoading={isLoadingChat} />
-          <MessageInput
-            onSend={(text) => {
-              void handleSendMessage(text)
-            }}
-            disabled={!canChat || isLoadingChat}
-            placeholder={
-              canChat
-                ? "Ask from this video transcript..."
-                : "Attach and select a ready video to start chatting..."
-            }
-          />
-        </section>
-      </div>
-
-      {previewDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-border bg-background shadow-xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                <p className="text-sm font-semibold">
-                  {previewDialog.kind === "summary" ? "Video Summary" : "Video Notes"}
+          {transcriptResult && (
+            <div className="space-y-4 rounded-xl border border-border bg-muted/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{transcriptResult.title || "YouTube Video"}</p>
+                  <p className="text-xs text-muted-foreground">Video ID: {transcriptResult.videoId}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Length: {transcriptResult.transcriptLength.toLocaleString()} chars • ~{transcriptWordCount.toLocaleString()} words
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setPreviewDialog(null)}
-                className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                Close
-              </button>
-            </div>
 
-            <div className="max-h-[70vh] overflow-auto px-4 py-3">
-              <p className="mb-2 text-xs text-muted-foreground">{previewDialog.title}</p>
-              <pre className="whitespace-pre-wrap rounded-lg bg-muted/20 p-3 text-xs leading-relaxed text-foreground">
-                {previewDialog.content}
-              </pre>
-            </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSummarizeTranscript()}
+                  disabled={isSummarizingTranscript}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSummarizingTranscript ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {isSummarizingTranscript ? "Summarizing..." : "Summarize with AI"}
+                </button>
+              </div>
 
-            <div className="flex justify-end border-t border-border px-4 py-3">
-              <button
-                type="button"
-                onClick={() =>
-                  downloadMarkdown(
-                    previewDialog.content,
-                    formatPreviewFileName(previewDialog.kind, previewDialog.title)
-                  )
-                }
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download
-              </button>
+              {transcriptSummary && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm leading-relaxed">
+                  <div className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>AI Summary</span>
+                  </div>
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap text-foreground">{transcriptSummary}</div>
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+                  <div className="flex items-center gap-2">
+                    <NotebookPen className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-semibold">Ask about this transcript</p>
+                  </div>
+
+                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-dashed border-border/70 bg-muted/30 p-2 text-sm">
+                    {transcriptChat.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No questions yet. Ask something about the video.</p>
+                    ) : (
+                      transcriptChat.map((msg, idx) => (
+                        <div
+                          key={`${msg.role}-${idx}-${msg.content.slice(0, 12)}`}
+                          className={`rounded-md px-3 py-2 text-[13px] ${msg.role === "user" ? "bg-primary/10 text-foreground" : "bg-muted text-foreground"}`}
+                        >
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {msg.role === "user" ? "You" : msg.related === false ? "AI (unrelated)" : "AI"}
+                          </p>
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 md:flex-row">
+                    <input
+                      value={transcriptQuestion}
+                      onChange={(e) => setTranscriptQuestion(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          void handleTranscriptAsk()
+                        }
+                      }}
+                      placeholder="Ask a question about this transcript..."
+                      className="h-10 w-full rounded-md border border-border bg-muted/20 px-3 text-sm outline-none transition-colors focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleTranscriptAsk()}
+                      disabled={isTranscriptAnswering}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-sm transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isTranscriptAnswering ? <Loader2 className="h-4 w-4 animate-spin" /> : <NotebookPen className="h-4 w-4" />}
+                      {isTranscriptAnswering ? "Thinking..." : "Ask"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transcript</p>
+                  <div className="mt-2 max-h-[320px] overflow-y-auto rounded-md border border-dashed border-border/60 bg-muted/20 p-3 text-sm leading-relaxed text-foreground">
+                    <div className="whitespace-pre-wrap">{transcriptResult.fullText}</div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </section>
     </div>
   )
 }

@@ -27,6 +27,26 @@ export interface Conversation {
   updatedAt: string
 }
 
+export interface TranscriptSegment {
+  text: string
+  offset: number
+  duration: number
+}
+
+export interface TranscriptResponse {
+  success: boolean
+  videoId: string
+  title?: string
+  fullText: string
+  segments: TranscriptSegment[]
+  transcriptLength: number
+}
+
+export interface TranscriptChatMessage {
+  role: "user" | "assistant"
+  content: string
+}
+
 export interface Document {
   _id: string
   name: string
@@ -498,4 +518,43 @@ export async function deleteYouTubeVideo(token: string, id: string): Promise<voi
     headers: { Authorization: `Bearer ${token}` },
   })
   return handleResponse<void>(res)
+}
+
+// ---------------------------------------------------------------------------
+// YouTube transcript (Phase 1)
+// ---------------------------------------------------------------------------
+export async function fetchTranscript(
+  payload: { youtubeUrl: string }
+): Promise<TranscriptResponse> {
+  const res = await fetch(`${BACKEND}/api/transcript`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  return handleResponse<TranscriptResponse>(res)
+}
+
+export async function summarizeTranscript(
+  payload: { transcript: string; title?: string }
+): Promise<{ summary: string }> {
+  const res = await fetch(`${BACKEND}/api/transcript/summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  return handleResponse<{ summary: string }>(res)
+}
+
+export async function askTranscriptQuestion(
+  payload: { transcript: string; question: string; history?: TranscriptChatMessage[] }
+): Promise<{ answer: string; related: boolean }> {
+  const res = await fetch(`${BACKEND}/api/transcript/qa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  return handleResponse<{ answer: string; related: boolean }>(res)
 }

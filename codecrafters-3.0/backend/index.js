@@ -9,6 +9,7 @@ const chatRoutes = require("./routes/chat");
 const documentRoutes = require("./routes/documents");
 const studyRoutes = require("./routes/study");
 const youtubeRoutes = require("./routes/youtube");
+const transcriptRoutes = require("./routes/transcript");
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/study", studyRoutes);
 app.use("/api/youtube", youtubeRoutes);
+app.use("/api/transcript", transcriptRoutes);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

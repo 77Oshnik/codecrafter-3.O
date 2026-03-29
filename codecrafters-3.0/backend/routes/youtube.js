@@ -8,37 +8,9 @@ const {
   generateYouTubeNotes,
 } = require("../services/geminiService");
 const { upsertVectors, deleteVectors } = require("../services/qdrantService");
+const { extractYouTubeVideoId, fetchYouTubeTitle } = require("../utils/youtube");
 
 const router = express.Router();
-
-function extractYouTubeVideoId(value) {
-  const input = String(value || "").trim();
-  if (!input) return null;
-
-  try {
-    const url = new URL(input);
-    const host = url.hostname.replace(/^www\./, "");
-
-    if (host === "youtu.be") {
-      const id = url.pathname.split("/").filter(Boolean)[0];
-      return id || null;
-    }
-
-    if (host === "youtube.com" || host === "m.youtube.com") {
-      if (url.pathname === "/watch") {
-        return url.searchParams.get("v");
-      }
-      const parts = url.pathname.split("/").filter(Boolean);
-      if (parts[0] === "shorts" || parts[0] === "embed") {
-        return parts[1] || null;
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
 
 function parseInlineJson(html, variableName) {
   const marker = `var ${variableName} = `;
@@ -369,21 +341,6 @@ function chunkTranscriptEntries(entries, maxChars = 1400) {
   }
 
   return chunks;
-}
-
-async function fetchYouTubeTitle(videoId) {
-  try {
-    const oembed = await fetch(
-      `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`
-    );
-
-    if (!oembed.ok) return "YouTube Video";
-
-    const data = await oembed.json();
-    return data?.title || "YouTube Video";
-  } catch {
-    return "YouTube Video";
-  }
 }
 
 router.post("/ingest", protect, async (req, res) => {

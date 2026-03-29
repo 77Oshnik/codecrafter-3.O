@@ -1,12 +1,28 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 let genAI = null;
+let transcriptGenAI = null;
+let transcriptApiKey = null;
 
 function getClient() {
   if (!genAI) {
     genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
   return genAI;
+}
+
+function getTranscriptClient() {
+  const apiKey = process.env.GEMINI_API_KEY_TRANSCRIPT || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY_TRANSCRIPT or GEMINI_API_KEY is not configured. Check your .env file.");
+  }
+
+  if (!transcriptGenAI || transcriptApiKey !== apiKey) {
+    transcriptGenAI = new GoogleGenerativeAI(apiKey);
+    transcriptApiKey = apiKey;
+  }
+
+  return transcriptGenAI;
 }
 
 /**
@@ -100,6 +116,20 @@ ${text.slice(0, 12000)}`;
   return result.response.text();
 }
 
+async function summarizeTranscript(text, videoTitle) {
+  const trimmed = String(text || "").slice(0, 16000);
+  if (!trimmed) {
+    throw new Error("Transcript text is required for summarization.");
+  }
+
+  // Using user-specified model that supports generateContent on v1beta
+  const model = getTranscriptClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+  const prompt = `Summarize the YouTube transcript for "${videoTitle || "Untitled video"}" in 4-6 concise bullet points. Be brief and avoid repetition. Return only the bullets (no intro or outro). Transcript:\n${trimmed}`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
 /**
  * Generate revision notes from multiple document summaries.
  * @param {Array<{name: string, summary: string}>} documents
@@ -161,6 +191,48 @@ function shuffleQuestionOptions(question) {
     optionReasons: zipped.map((item) => item.reason),
     correctOptionIndex: newCorrectOptionIndex,
   };
+}
+
+async function answerTranscriptQuestion(transcript, question, history = []) {
+  const cleanedTranscript = String(transcript || "").slice(0, 16000);
+  const cleanedQuestion = String(question || "").trim();
+
+  if (!cleanedTranscript) {
+    throw new Error("Transcript text is required for Q&A.");
+  }
+  if (!cleanedQuestion) {
+    throw new Error("Question is required for Q&A.");
+  }
+
+  // Using user-specified model that supports generateContent on v1beta
+  const model = getTranscriptClient().getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
+
+  const historyText = Array.isArray(history)
+    ? history
+        .filter((m) => m && typeof m.content === "string" && (m.role === "user" || m.role === "assistant"))
+        .slice(-8) // last 8 turns
+        .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+        .join("\n")
+    : "";
+
+  const prompt = `You are a concise tutor answering questions about a YouTube video transcript. Always rely on the transcript content. If the user's question is unrelated to the transcript, start your reply with "Unrelated:" and then give a brief general answer. Keep responses under 120 words. Avoid repetition.
+
+Transcript (trimmed):
+${cleanedTranscript}
+
+Recent chat history:
+${historyText || "(none)"}
+
+User question: ${cleanedQuestion}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text() || "";
+
+  const normalized = text.trim();
+  const unrelated = /^unrelated[:\-]/i.test(normalized) || /unrelated to the transcript/i.test(normalized);
+  const related = !unrelated;
+
+  return { answer: normalized, related };
 }
 
 /**
@@ -420,5 +492,7 @@ module.exports = {
   generateRevisionNotes,
   generateQuizFromContext,
   generateFlashcardsFromContext,
+  summarizeTranscript,
+  answerTranscriptQuestion,
   generateFlowchartFromContext,
 };
