@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, Suspense } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import {
   ChevronLeft, Loader2, Play, CheckCircle, Lock,
   Search, BookOpen, Brain, ChevronRight
@@ -20,6 +22,30 @@ import {
   type LearningQuizQuestion,
   type LearningQuizSubmitResult
 } from "@/lib/api"
+
+function normalizeAiMarkdown(input: string): string {
+  if (!input) return ""
+
+  const normalized = input
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    // Convert isolated bullet markers to valid list lines.
+    .replace(/\n\s*[•●]\s*\n\s*/g, "\n- ")
+    // Convert bullet symbols to markdown bullets when already on same line.
+    .replace(/^\s*[•●]\s+/gm, "- ")
+    // Remove horizontal separator artifacts like ***
+    .replace(/^\s*\*{3,}\s*$/gm, "")
+
+  return normalized.trim()
+}
+
+function cleanPointText(point: string): string {
+  return String(point || "")
+    .replace(/^\s*[•*+-]+\s*/g, "")
+    .replace(/^\s*#{1,6}\s*/g, "")
+    .replace(/\*\*/g, "")
+    .trim()
+}
 
 function TopicPageInner() {
   const { data: session } = useSession()
@@ -48,6 +74,10 @@ function TopicPageInner() {
 
   const topic = path?.roadmap.find(t => t.id === topicId)
   const activeSubtopic = topic?.subtopics.find(s => s.id === activeSubtopicId)
+  const parsedContent = normalizeAiMarkdown(content?.content || "")
+  const cleanedKeyPoints = (content?.keyPoints || [])
+    .map(cleanPointText)
+    .filter(Boolean)
 
   const loadContent = useCallback(async (stId: string) => {
     if (!token || !pathId || !topicId || !stId) return
@@ -219,7 +249,7 @@ function TopicPageInner() {
 
       <div className="flex w-full h-full overflow-hidden">
         {/* Subtopic sidebar */}
-        <aside className="w-56 flex-shrink-0 border-r border-border overflow-y-auto bg-muted/20">
+        <aside className="w-56 shrink-0 border-r border-border overflow-y-auto bg-muted/20">
           <div className="p-3 border-b border-border">
             <button
               onClick={() => router.push(`/dashboard/learn/${pathId}`)}
@@ -245,7 +275,7 @@ function TopicPageInner() {
                     : "hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span className="flex-shrink-0">
+                <span className="shrink-0">
                   {sub.status === "completed" ? (
                     <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                   ) : sub.status === "locked" ? (
@@ -302,14 +332,14 @@ function TopicPageInner() {
               </div>
 
               {/* Key Points */}
-              {content.keyPoints.length > 0 && (
+              {cleanedKeyPoints.length > 0 && (
                 <div className="mb-5 border border-primary/20 rounded-xl p-4 bg-primary/5">
                   <div className="flex items-center gap-2 mb-3">
                     <Brain className="w-4 h-4 text-primary" />
                     <p className="text-xs font-semibold text-primary">Key Points</p>
                   </div>
                   <ul className="space-y-1.5">
-                    {content.keyPoints.map((point, i) => (
+                    {cleanedKeyPoints.map((point, i) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                         <span className="text-primary mt-0.5">•</span>
                         {point}
@@ -319,11 +349,25 @@ function TopicPageInner() {
                 </div>
               )}
 
-              {/* Main content - markdown rendered as pre-formatted */}
-              <article className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
-                <div className="whitespace-pre-wrap text-foreground/90 text-sm leading-7">
-                  {content.content}
-                </div>
+              {/* Main content */}
+              <article className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed prose-headings:scroll-mt-20 prose-p:leading-7 prose-li:leading-7">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ ...props }) => <h1 className="mt-5 mb-2 text-2xl font-semibold" {...props} />,
+                    h2: ({ ...props }) => <h2 className="mt-5 mb-2 text-xl font-semibold" {...props} />,
+                    h3: ({ ...props }) => <h3 className="mt-4 mb-2 text-base font-semibold" {...props} />,
+                    p: ({ ...props }) => <p className="text-foreground/90 leading-7" {...props} />,
+                    ul: ({ ...props }) => <ul className="my-2 list-disc pl-5" {...props} />,
+                    ol: ({ ...props }) => <ol className="my-2 list-decimal pl-5" {...props} />,
+                    li: ({ ...props }) => <li className="my-1 text-foreground/90" {...props} />,
+                    strong: ({ ...props }) => <strong className="font-semibold text-foreground" {...props} />,
+                    code: ({ ...props }) => <code className="rounded bg-muted px-1 py-0.5 text-[0.9em]" {...props} />,
+                    blockquote: ({ ...props }) => <blockquote className="border-l-2 border-border pl-3 text-muted-foreground" {...props} />,
+                  }}
+                >
+                  {parsedContent}
+                </ReactMarkdown>
               </article>
 
               {/* YouTube search */}
@@ -388,7 +432,7 @@ function TopicPageInner() {
         </main>
 
         {/* Right resource tab panel */}
-        <aside className="hidden xl:flex w-[24rem] flex-shrink-0 border-l border-border bg-muted/10 flex-col">
+        <aside className="hidden xl:flex w-[24rem] shrink-0 border-l border-border bg-muted/10 flex-col">
           <div className="p-3 border-b border-border">
             <p className="text-xs font-semibold">Learning Resources</p>
             <div className="mt-2 inline-flex rounded-lg border border-border p-0.5 bg-background">
@@ -458,7 +502,7 @@ function TopicPageInner() {
                             <img
                               src={video.thumbnailUrl}
                               alt={video.title}
-                              className="w-20 h-12 rounded object-cover flex-shrink-0"
+                              className="w-20 h-12 rounded object-cover shrink-0"
                             />
                             <div className="min-w-0">
                               <p className="text-xs font-medium line-clamp-2">{video.title}</p>
