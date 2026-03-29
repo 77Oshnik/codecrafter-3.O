@@ -82,6 +82,516 @@ function normalizeQuizQuestions(questions) {
     .filter(q => q.question.trim() && q.options.length === 4);
 }
 
+function normalizeSeverity(value) {
+  const v = String(value || '').toLowerCase();
+  if (['high', 'medium', 'low'].includes(v)) return v;
+  return 'medium';
+}
+
+function normalizeConfidence(value) {
+  const v = String(value || '').toLowerCase();
+  if (['high', 'medium', 'low'].includes(v)) return v;
+  return 'medium';
+}
+
+function extractLooseObjectBlocks(text) {
+  if (typeof text !== 'string') return [];
+  return text.match(/\{[^{}]*\}/g) || [];
+}
+
+function readLooseStringField(block, key) {
+  if (typeof block !== 'string') return '';
+  const reQuoted = new RegExp(`${key}\\s*:\\s*['\"]([^'\\"]+)['\"]`, 'i');
+  const quoted = block.match(reQuoted);
+  if (quoted?.[1]) return quoted[1].trim();
+
+  const reBare = new RegExp(`${key}\\s*:\\s*([^,}]+)`, 'i');
+  const bare = block.match(reBare);
+  return bare?.[1] ? bare[1].trim().replace(/^['\"]|['\"]$/g, '') : '';
+}
+
+function readLooseNumberField(block, key) {
+  const value = readLooseStringField(block, key);
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toObjectArray(value) {
+  if (Array.isArray(value)) return value;
+
+  if (value && typeof value === 'object') {
+    return [value];
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object') return [parsed];
+    } catch {
+      // fall through to loose parser
+    }
+
+    return extractLooseObjectBlocks(trimmed);
+  }
+
+  return [];
+}
+
+function normalizeGraphNodes(input, fallbackNodes = []) {
+  const mapped = toObjectArray(input)
+    .map(item => {
+      if (typeof item === 'string') {
+        const id = readLooseStringField(item, 'id');
+        const label = readLooseStringField(item, 'label');
+        const type = readLooseStringField(item, 'type');
+        if (!id || !label) return null;
+        return { id, label, type: type || 'prerequisite' };
+      }
+
+      if (!item || typeof item !== 'object') return null;
+      const id = String(item.id || '').trim();
+      const label = String(item.label || '').trim();
+      const type = String(item.type || 'prerequisite').trim();
+      if (!id || !label) return null;
+      return { id, label, type };
+    })
+    .filter(Boolean);
+
+  return mapped.length ? mapped : fallbackNodes;
+}
+
+function normalizeGraphEdges(input, fallbackEdges = []) {
+  const mapped = toObjectArray(input)
+    .map(item => {
+      if (typeof item === 'string') {
+        const from = readLooseStringField(item, 'from');
+        const to = readLooseStringField(item, 'to');
+        const reason = readLooseStringField(item, 'reason');
+        const weight = readLooseNumberField(item, 'weight');
+        if (!from || !to) return null;
+        return {
+          from,
+          to,
+          reason: reason || 'Related concept dependency',
+          weight: Number.isFinite(weight) ? weight : 1
+        };
+      }
+
+      if (!item || typeof item !== 'object') return null;
+      const from = String(item.from || '').trim();
+      const to = String(item.to || '').trim();
+      if (!from || !to) return null;
+
+      const weight = Number(item.weight);
+      return {
+        from,
+        to,
+        reason: String(item.reason || 'Related concept dependency'),
+        weight: Number.isFinite(weight) ? weight : 1
+      };
+    })
+    .filter(Boolean);
+
+  return mapped.length ? mapped : fallbackEdges;
+}
+
+function normalizeMisconceptionBreakdown(input, fallback = []) {
+  const mapped = toObjectArray(input)
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const label = String(item.label || item.misconception || '').trim();
+      if (!label) return null;
+      const count = Number(item.count);
+      return {
+        label,
+        count: Number.isFinite(count) ? count : 1,
+        severity: normalizeSeverity(item.severity)
+      };
+    })
+    .filter(Boolean);
+
+  return mapped.length ? mapped : fallback;
+}
+
+function normalizeWeakSubtopics(input, fallback = []) {
+  const mapped = toObjectArray(input)
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const subtopicId = String(item.subtopicId || '').trim();
+      const subtopicTitle = String(item.subtopicTitle || item.title || '').trim();
+      if (!subtopicId || !subtopicTitle) return null;
+
+      const score = Number(item.score);
+      const attempts = Number(item.attempts);
+      const confidence = Number(item.confidence);
+
+      return {
+        subtopicId,
+        subtopicTitle,
+        score: Number.isFinite(score) ? score : 50,
+        attempts: Number.isFinite(attempts) ? attempts : 1,
+        confidence: Number.isFinite(confidence) ? confidence : 50
+      };
+    })
+    .filter(Boolean);
+
+  return mapped.length ? mapped : fallback;
+}
+
+function createFallbackRootCauseAnalysis(payload = {}) {
+  const {
+    mainTopic = '',
+    topicTitle = '',
+    subtopicTitle = '',
+    percentage = 0,
+    wrongAnswers = [],
+    prerequisiteCandidates = []
+  } = payload;
+
+  const misconceptionMap = new Map();
+  const wrongAnswerAnalyses = wrongAnswers.map((item, idx) => {
+    const reason = item?.correctExplanation
+      ? 'Concept application mismatch'
+      : 'Core concept confusion';
+
+    misconceptionMap.set(reason, (misconceptionMap.get(reason) || 0) + 1);
+
+    return {
+      questionIndex: Number.isInteger(item?.questionIndex) ? item.questionIndex : idx,
+      question: String(item?.question || `Question ${idx + 1}`),
+      selectedOption: String(item?.selectedOption || 'Not answered'),
+      correctOption: String(item?.correctOption || 'N/A'),
+      misconception: reason,
+      whyWrong: String(item?.correctExplanation || 'Your selected option did not match the expected concept.'),
+      ragExplanation: String(item?.correctExplanation || 'Revisit the concept summary and compare solved examples.'),
+      confidence: 'medium'
+    };
+  });
+
+  const misconceptionBreakdown = Array.from(misconceptionMap.entries()).map(([label, count]) => ({
+    label,
+    count,
+    severity: count >= 2 ? 'high' : 'medium'
+  }));
+
+  const prerequisiteGaps = prerequisiteCandidates.slice(0, 3).map((item, index) => ({
+    topic: String(item?.subtopicTitle || item?.title || `Prerequisite ${index + 1}`),
+    reason: 'Low prior performance suggests this prerequisite needs reinforcement.',
+    severity: Number(item?.score || 0) < 50 ? 'high' : 'medium',
+    confidence: Number.isFinite(Number(item?.score)) ? Math.max(30, Math.min(95, Number(item.score))) : 55
+  }));
+
+  const remediationPlan = [
+    {
+      step: 1,
+      title: `Review prerequisite for ${subtopicTitle || 'this subtopic'}`,
+      description: 'Revisit foundational definitions and one worked example before retrying.',
+      recommendedProblems: 5,
+      successMetric: 'Score at least 70% on checkpoint questions.'
+    },
+    {
+      step: 2,
+      title: `Practice ${subtopicTitle || 'target concept'}`,
+      description: 'Solve mixed practice with focus on operation order and concept selection.',
+      recommendedProblems: 10,
+      successMetric: 'Achieve 8/10 correct with clear solution steps.'
+    },
+    {
+      step: 3,
+      title: 'Retry the quiz',
+      description: 'Take the quiz again and compare mistakes against this analysis.',
+      recommendedProblems: 5,
+      successMetric: 'Reach at least 80% and reduce repeated mistake types.'
+    }
+  ];
+
+  const weakSubtopics = prerequisiteCandidates.slice(0, 5).map((item, index) => ({
+    subtopicId: String(item?.subtopicId || `weak-${index + 1}`),
+    subtopicTitle: String(item?.subtopicTitle || item?.title || `Weak area ${index + 1}`),
+    score: Number.isFinite(Number(item?.score)) ? Number(item.score) : 50,
+    attempts: Number.isFinite(Number(item?.attempts)) ? Number(item.attempts) : 1,
+    confidence: Number.isFinite(Number(item?.confidenceScore)) ? Number(item.confidenceScore) : 50
+  }));
+
+  const graphNodes = [
+    { id: 'main-topic', label: mainTopic || topicTitle || 'Main Topic', type: 'topic' },
+    { id: 'target-subtopic', label: subtopicTitle || 'Current Subtopic', type: 'target' },
+    ...prerequisiteGaps.map((gap, index) => ({
+      id: `prereq-${index + 1}`,
+      label: gap.topic,
+      type: 'prerequisite'
+    })),
+    ...misconceptionBreakdown.map((m, index) => ({
+      id: `mis-${index + 1}`,
+      label: m.label,
+      type: 'misconception'
+    }))
+  ];
+
+  const graphEdges = [
+    { from: 'main-topic', to: 'target-subtopic', reason: 'Current learning target', weight: 1 },
+    ...prerequisiteGaps.map((gap, index) => ({
+      from: `prereq-${index + 1}`,
+      to: 'target-subtopic',
+      reason: gap.reason,
+      weight: gap.severity === 'high' ? 3 : 2
+    })),
+    ...misconceptionBreakdown.map((m, index) => ({
+      from: 'target-subtopic',
+      to: `mis-${index + 1}`,
+      reason: 'Observed from wrong answers',
+      weight: m.severity === 'high' ? 3 : 2
+    }))
+  ];
+
+  return {
+    summary: percentage >= 60
+      ? `You passed ${subtopicTitle || 'this subtopic'}, but there are still conceptual gaps to tighten.`
+      : `You need reinforcement in ${subtopicTitle || 'this subtopic'} before moving forward confidently.`,
+    likelyRootCause: misconceptionBreakdown[0]?.label || 'Foundational concept confusion',
+    misconceptions: misconceptionBreakdown,
+    prerequisiteGaps,
+    wrongAnswerAnalyses,
+    remediationPlan,
+    visualData: {
+      misconceptionBreakdown,
+      weakSubtopics,
+      prerequisiteGraph: {
+        nodes: graphNodes,
+        edges: graphEdges
+      }
+    },
+    generatedBy: 'fallback-engine',
+    generatedAt: new Date()
+  };
+}
+
+function normalizeRootCauseAnalysis(raw = {}, payload = {}) {
+  const fallback = createFallbackRootCauseAnalysis(payload);
+
+  const misconceptions = Array.isArray(raw?.misconceptions)
+    ? raw.misconceptions
+      .map(item => ({
+        label: String(item?.label || item?.misconception || '').trim(),
+        count: Number.isFinite(Number(item?.count)) ? Number(item.count) : 1,
+        severity: normalizeSeverity(item?.severity)
+      }))
+      .filter(item => item.label)
+    : [];
+
+  const prerequisiteGaps = Array.isArray(raw?.prerequisiteGaps)
+    ? raw.prerequisiteGaps
+      .map(item => ({
+        topic: String(item?.topic || '').trim(),
+        reason: String(item?.reason || 'Prerequisite gap detected.').trim(),
+        severity: normalizeSeverity(item?.severity),
+        confidence: Number.isFinite(Number(item?.confidence)) ? Number(item.confidence) : 60
+      }))
+      .filter(item => item.topic)
+    : [];
+
+  const wrongAnswerAnalyses = Array.isArray(raw?.wrongAnswerAnalyses)
+    ? raw.wrongAnswerAnalyses
+      .map((item, idx) => ({
+        questionIndex: Number.isFinite(Number(item?.questionIndex)) ? Number(item.questionIndex) : idx,
+        question: String(item?.question || '').trim(),
+        selectedOption: String(item?.selectedOption || 'Not answered'),
+        correctOption: String(item?.correctOption || 'N/A'),
+        misconception: String(item?.misconception || 'Concept confusion').trim(),
+        whyWrong: String(item?.whyWrong || 'The selected option does not match the expected reasoning.').trim(),
+        ragExplanation: String(item?.ragExplanation || item?.whyWrong || '').trim(),
+        confidence: normalizeConfidence(item?.confidence)
+      }))
+      .filter(item => item.question)
+    : [];
+
+  const remediationPlan = Array.isArray(raw?.remediationPlan)
+    ? raw.remediationPlan
+      .map((item, idx) => ({
+        step: Number.isFinite(Number(item?.step)) ? Number(item.step) : idx + 1,
+        title: String(item?.title || `Step ${idx + 1}`),
+        description: String(item?.description || 'Follow this intervention step.'),
+        recommendedProblems: Number.isFinite(Number(item?.recommendedProblems))
+          ? Number(item.recommendedProblems)
+          : 5,
+        successMetric: String(item?.successMetric || 'Improve understanding before retry.')
+      }))
+      .filter(item => item.title)
+    : [];
+
+  const visualData = raw?.visualData && typeof raw.visualData === 'object'
+    ? raw.visualData
+    : {};
+
+  return {
+    summary: String(raw?.summary || fallback.summary),
+    likelyRootCause: String(raw?.likelyRootCause || fallback.likelyRootCause),
+    misconceptions: misconceptions.length ? misconceptions : fallback.misconceptions,
+    prerequisiteGaps: prerequisiteGaps.length ? prerequisiteGaps : fallback.prerequisiteGaps,
+    wrongAnswerAnalyses: wrongAnswerAnalyses.length ? wrongAnswerAnalyses : fallback.wrongAnswerAnalyses,
+    remediationPlan: remediationPlan.length ? remediationPlan : fallback.remediationPlan,
+    visualData: {
+      misconceptionBreakdown: normalizeMisconceptionBreakdown(
+        visualData?.misconceptionBreakdown,
+        fallback.visualData.misconceptionBreakdown
+      ),
+      weakSubtopics: normalizeWeakSubtopics(
+        visualData?.weakSubtopics,
+        fallback.visualData.weakSubtopics
+      ),
+      prerequisiteGraph: {
+        nodes: normalizeGraphNodes(
+          visualData?.prerequisiteGraph?.nodes,
+          fallback.visualData.prerequisiteGraph.nodes
+        ),
+        edges: normalizeGraphEdges(
+          visualData?.prerequisiteGraph?.edges,
+          fallback.visualData.prerequisiteGraph.edges
+        )
+      }
+    },
+    generatedBy: 'gemini-root-cause-engine',
+    generatedAt: new Date()
+  };
+}
+
+async function analyzeQuizRootCauses(payload) {
+  const {
+    mainTopic,
+    topicTitle,
+    subtopicTitle,
+    userLevel,
+    score,
+    total,
+    percentage,
+    wrongAnswers = [],
+    prerequisiteCandidates = [],
+    weakMemories = [],
+    ragContext = []
+  } = payload || {};
+
+  if (!Array.isArray(wrongAnswers) || wrongAnswers.length === 0) {
+    return {
+      summary: 'Great work. No incorrect answers were found, so no root-cause gaps detected.',
+      likelyRootCause: 'None',
+      misconceptions: [],
+      prerequisiteGaps: [],
+      wrongAnswerAnalyses: [],
+      remediationPlan: [{
+        step: 1,
+        title: 'Move to the next subtopic',
+        description: 'Maintain momentum and continue to the next available learning node.',
+        recommendedProblems: 3,
+        successMetric: 'Keep scores above 80% for consistency.'
+      }],
+      visualData: {
+        misconceptionBreakdown: [],
+        weakSubtopics: [],
+        prerequisiteGraph: {
+          nodes: [{ id: 'target-subtopic', label: subtopicTitle || 'Current Subtopic', type: 'target' }],
+          edges: []
+        }
+      },
+      generatedBy: 'root-cause-engine',
+      generatedAt: new Date()
+    };
+  }
+
+  const prompt = `You are a precise educational diagnostician.
+
+Analyze quiz mistakes and produce a root-cause analysis for this learner.
+
+Learner context:
+- Main topic: ${mainTopic}
+- Topic: ${topicTitle}
+- Subtopic: ${subtopicTitle}
+- Learner level: ${userLevel}
+- Score: ${score}/${total} (${percentage}%)
+
+Wrong answers JSON:
+${JSON.stringify(wrongAnswers, null, 2)}
+
+Prerequisite candidates JSON:
+${JSON.stringify(prerequisiteCandidates, null, 2)}
+
+Weak memory signals JSON:
+${JSON.stringify(weakMemories, null, 2)}
+
+RAG context snippets JSON:
+${JSON.stringify(ragContext, null, 2)}
+
+Rules:
+- Diagnose misconceptions, not just weak topics.
+- Trace probable prerequisite gaps.
+- Give actionable intervention steps.
+- For each wrong answer, add a short "ragExplanation" grounded in the provided context snippets.
+- Keep language student-friendly and specific.
+- Return ONLY valid JSON, no markdown.
+
+Return object shape:
+{
+  "summary": "...",
+  "likelyRootCause": "...",
+  "misconceptions": [
+    { "label": "...", "count": 2, "severity": "high" }
+  ],
+  "prerequisiteGaps": [
+    { "topic": "...", "reason": "...", "severity": "high", "confidence": 78 }
+  ],
+  "wrongAnswerAnalyses": [
+    {
+      "questionIndex": 0,
+      "question": "...",
+      "selectedOption": "...",
+      "correctOption": "...",
+      "misconception": "...",
+      "whyWrong": "...",
+      "ragExplanation": "...",
+      "confidence": "medium"
+    }
+  ],
+  "remediationPlan": [
+    {
+      "step": 1,
+      "title": "...",
+      "description": "...",
+      "recommendedProblems": 5,
+      "successMetric": "..."
+    }
+  ],
+  "visualData": {
+    "misconceptionBreakdown": [
+      { "label": "...", "count": 2, "severity": "high" }
+    ],
+    "weakSubtopics": [
+      { "subtopicId": "...", "subtopicTitle": "...", "score": 40, "attempts": 2, "confidence": 45 }
+    ],
+    "prerequisiteGraph": {
+      "nodes": [
+        { "id": "...", "label": "...", "type": "topic|target|prerequisite|misconception" }
+      ],
+      "edges": [
+        { "from": "...", "to": "...", "reason": "...", "weight": 1 }
+      ]
+    }
+  }
+}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const parsed = extractJSON(text);
+    return normalizeRootCauseAnalysis(parsed, payload);
+  } catch (err) {
+    console.warn('[root-cause-engine] fallback due to generation issue:', err?.message || err);
+    return createFallbackRootCauseAnalysis(payload);
+  }
+}
+
 // ─── Assessment Generation ────────────────────────────────────────────────────
 
 async function generateAssessmentQuestions(topic) {
@@ -436,6 +946,7 @@ module.exports = {
   generateRoadmap,
   generateTopicContent,
   generateTopicQuiz,
+  analyzeQuizRootCauses,
   calculateNextReview,
   getAdaptedLevel,
   createRevisionSubtopic,

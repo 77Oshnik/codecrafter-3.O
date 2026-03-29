@@ -26,6 +26,14 @@ export function AssessmentView({ topic, questions, onSubmit, onCancel }: Props) 
   const answered = answers.filter(a => a !== null).length
   const allAnswered = answered === questions.length
 
+  if (!question) {
+    return (
+      <div className="w-full h-full overflow-y-auto flex items-center justify-center bg-background p-4">
+        <p className="text-sm text-muted-foreground">No assessment question available.</p>
+      </div>
+    )
+  }
+
   const select = (optionIdx: number) => {
     const next = [...answers]
     next[current] = optionIdx

@@ -663,6 +663,7 @@ export interface LearningPath extends LearningPathSummary {
   roadmap: RoadmapTopic[]
   recentResults?: { topicId: string; subtopicId: string; percentage: number; createdAt: string }[]
   weakTopics?: { topicTitle: string; subtopicTitle: string; confidenceScore: number }[]
+  rootCauseOverview?: RootCauseOverview
 }
 
 export interface AssessmentQuestion {
@@ -710,12 +711,94 @@ export interface LearningQuizFeedback {
   explanation: string
 }
 
+export interface MisconceptionItem {
+  label: string
+  count: number
+  severity: "low" | "medium" | "high"
+}
+
+export interface PrerequisiteGapItem {
+  topic: string
+  reason: string
+  severity: "low" | "medium" | "high"
+  confidence: number
+}
+
+export interface WrongAnswerAnalysisItem {
+  questionIndex: number
+  question: string
+  selectedOption: string
+  correctOption: string
+  misconception: string
+  whyWrong: string
+  ragExplanation: string
+  confidence: "low" | "medium" | "high"
+}
+
+export interface RemediationStep {
+  step: number
+  title: string
+  description: string
+  recommendedProblems: number
+  successMetric: string
+}
+
+export interface RootCauseGraphNode {
+  id: string
+  label: string
+  type: string
+}
+
+export interface RootCauseGraphEdge {
+  from: string
+  to: string
+  reason: string
+  weight: number
+}
+
+export interface RootCauseAnalysis {
+  summary: string
+  likelyRootCause: string
+  misconceptions: MisconceptionItem[]
+  prerequisiteGaps: PrerequisiteGapItem[]
+  wrongAnswerAnalyses: WrongAnswerAnalysisItem[]
+  remediationPlan: RemediationStep[]
+  visualData: {
+    misconceptionBreakdown: MisconceptionItem[]
+    weakSubtopics: {
+      subtopicId: string
+      subtopicTitle: string
+      score: number
+      attempts: number
+      confidence: number
+    }[]
+    prerequisiteGraph: {
+      nodes: RootCauseGraphNode[]
+      edges: RootCauseGraphEdge[]
+    }
+  }
+  generatedBy: string
+  generatedAt: string
+}
+
+export interface RootCauseOverview {
+  totalAnalyses: number
+  misconceptionHotspots: { label: string; count: number }[]
+  prerequisiteHotspots: { topic: string; count: number }[]
+  weakSubtopics: {
+    subtopicTitle: string
+    topicTitle: string
+    confidenceScore: number
+  }[]
+}
+
 export interface LearningQuizSubmitResult {
   score: number
   total: number
   percentage: number
   passed: boolean
   feedback: LearningQuizFeedback[]
+  rootCauseAnalysis?: RootCauseAnalysis
   nextInfo?: {
     type: "subtopic" | "topic"
     topicId: string

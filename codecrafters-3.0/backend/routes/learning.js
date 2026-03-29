@@ -13,6 +13,7 @@ const {
   generateRoadmap,
   generateTopicContent,
   generateTopicQuiz,
+  analyzeQuizRootCauses,
   calculateNextReview,
   getAdaptedLevel,
   ensureRevisionSubtopic,
@@ -190,10 +191,57 @@ router.get('/paths/:id', async (req, res) => {
       isWeak: true
     }).select('topicTitle subtopicTitle confidenceScore');
 
+    const recentRootCauseResults = await LearningQuizResult.find({
+      userId: req.user.id,
+      learningPathId: path._id,
+      rootCauseAnalysis: { $exists: true }
+    })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('subtopicId percentage createdAt rootCauseAnalysis');
+
+    const misconceptionCounts = new Map();
+    const prerequisiteGapCounts = new Map();
+
+    recentRootCauseResults.forEach(result => {
+      const misconceptions = result?.rootCauseAnalysis?.misconceptions || [];
+      misconceptions.forEach(item => {
+        const key = item?.label || 'Uncategorized misconception';
+        misconceptionCounts.set(key, (misconceptionCounts.get(key) || 0) + (item?.count || 1));
+      });
+
+      const gaps = result?.rootCauseAnalysis?.prerequisiteGaps || [];
+      gaps.forEach(item => {
+        const key = item?.topic || 'Unknown prerequisite';
+        prerequisiteGapCounts.set(key, (prerequisiteGapCounts.get(key) || 0) + 1);
+      });
+    });
+
+    const rootCauseOverview = {
+      totalAnalyses: recentRootCauseResults.length,
+      misconceptionHotspots: Array.from(misconceptionCounts.entries())
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+      prerequisiteHotspots: Array.from(prerequisiteGapCounts.entries())
+        .map(([topic, count]) => ({ topic, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+      weakSubtopics: weakMemories
+        .map(item => ({
+          subtopicTitle: item.subtopicTitle,
+          topicTitle: item.topicTitle,
+          confidenceScore: item.confidenceScore
+        }))
+        .sort((a, b) => a.confidenceScore - b.confidenceScore)
+        .slice(0, 8)
+    };
+
     res.json({
       ...path.toObject(),
       recentResults,
-      weakTopics: weakMemories
+      weakTopics: weakMemories,
+      rootCauseOverview
     });
   } catch (err) {
     console.error('Get path error:', err);
@@ -522,6 +570,84 @@ router.post('/quiz/:quizId/submit', async (req, res) => {
     const percentage = Math.round((score / total) * 100);
     console.log('[quiz submit] graded quiz', { score, total, percentage });
 
+    const wrongAnswers = feedback
+      .map((entry, index) => ({ entry, index }))
+      .filter(item => !item.entry.isCorrect)
+      .map(item => {
+        const question = quiz.questions[item.index] || {};
+        const selectedIdx = item.entry.selectedIndex;
+        const selectedOption = Number.isInteger(selectedIdx)
+          ? question.options?.[selectedIdx]
+          : null;
+
+        return {
+          questionIndex: item.index,
+          question: item.entry.question,
+          selectedIndex: selectedIdx,
+          selectedOption: selectedOption || 'No valid option selected',
+          correctIndex: item.entry.correctIndex,
+          correctOption: question.options?.[item.entry.correctIndex] || 'Correct option unavailable',
+          correctExplanation: item.entry.explanation || ''
+        };
+      });
+
+    const topicIndex = learningPath.roadmap.findIndex(t => t.id === topicId);
+    const subtopicIndex = topicIndex >= 0
+      ? learningPath.roadmap[topicIndex].subtopics.findIndex(s => s.id === subtopicId)
+      : -1;
+
+    const prerequisiteCandidates = topicIndex >= 0 && subtopicIndex > 0
+      ? learningPath.roadmap[topicIndex].subtopics
+        .slice(0, subtopicIndex)
+        .filter(s => (s.type || 'core') === 'core')
+        .map(s => ({
+          subtopicId: s.id,
+          title: s.title,
+          score: s.quizScore ?? 50,
+          attempts: s.quizAttempts ?? 0
+        }))
+      : [];
+
+    const [weakMemoriesForAnalysis, relatedContent] = await Promise.all([
+      UserMemory.find({
+        userId: req.user.id,
+        learningPathId: pathId,
+        isWeak: true
+      })
+        .sort({ confidenceScore: 1, updatedAt: -1 })
+        .limit(8)
+        .select('topicId subtopicId topicTitle subtopicTitle confidenceScore totalAttempts'),
+      TopicContent.find({
+        learningPathId: pathId,
+        topicId,
+        subtopicId: { $in: [subtopicId, ...prerequisiteCandidates.map(s => s.subtopicId)] }
+      })
+        .select('subtopicId subtopicTitle keyPoints content')
+        .sort({ updatedAt: -1 })
+        .limit(8)
+    ]);
+
+    const ragContext = relatedContent.map(item => ({
+      subtopicId: item.subtopicId,
+      subtopicTitle: item.subtopicTitle,
+      keyPoints: Array.isArray(item.keyPoints) ? item.keyPoints.slice(0, 5) : [],
+      excerpt: String(item.content || '').slice(0, 500)
+    }));
+
+    const rootCauseAnalysis = await analyzeQuizRootCauses({
+      mainTopic: learningPath.topic,
+      topicTitle: quiz.topicTitle,
+      subtopicTitle: quiz.subtopicTitle,
+      userLevel: learningPath.userLevel,
+      score,
+      total,
+      percentage,
+      wrongAnswers,
+      prerequisiteCandidates,
+      weakMemories: weakMemoriesForAnalysis,
+      ragContext
+    });
+
     // Step 1: Save quiz result
     console.log('[quiz submit] step 1 – saving result');
     const result = await LearningQuizResult.create({
@@ -534,7 +660,8 @@ router.post('/quiz/:quizId/submit', async (req, res) => {
       score,
       total,
       percentage,
-      feedback
+      feedback,
+      rootCauseAnalysis
     });
     console.log('[quiz submit] step 1 done – result id:', result._id);
 
@@ -734,6 +861,7 @@ router.post('/quiz/:quizId/submit', async (req, res) => {
       percentage,
       passed,
       feedback,
+      rootCauseAnalysis,
       nextInfo,
       confidenceScore,
       nextReviewAt: nextReview.nextReviewAt,

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Lock, PlayCircle, CheckCircle, ChevronDown, ChevronRight, Clock, Brain } from "lucide-react"
+import { Lock, PlayCircle, CheckCircle, ChevronDown, ChevronRight, Clock, Brain, AlertTriangle, GitBranch, Target } from "lucide-react"
 import { useState } from "react"
 import type { LearningPath, RoadmapTopic } from "@/lib/api"
 
@@ -49,7 +49,7 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
         className="w-full p-5 flex items-start gap-3 text-left"
         onClick={() => topic.status !== "locked" && setExpanded(e => !e)}
       >
-        <div className="flex-shrink-0 w-8 h-8 rounded-full border bg-background flex items-center justify-center text-xs font-semibold mt-0.5">
+        <div className="shrink-0 w-8 h-8 rounded-full border bg-background flex items-center justify-center text-xs font-semibold mt-0.5">
           {topic.status === "completed" ? (
             <CheckCircle className="w-5 h-5 text-green-500" />
           ) : topic.status === "locked" ? (
@@ -86,7 +86,7 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
         </div>
 
         {topic.status !== "locked" && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
           </div>
         )}
@@ -108,7 +108,7 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
                   : "border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer"
               }`}
             >
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 {sub.status === "completed" ? (
                   <CheckCircle className="w-4 h-4 text-green-500" />
                 ) : sub.status === "locked" ? (
@@ -150,6 +150,7 @@ export function RoadmapView({ path }: Props) {
   const allSubtopics = path.roadmap.flatMap(topic => topic.subtopics)
   const completedSubtopics = allSubtopics.filter(sub => sub.status === "completed").length
   const adaptiveSubtopics = allSubtopics.filter(sub => sub.adaptive).length
+  const rootCause = path.rootCauseOverview
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -189,6 +190,83 @@ export function RoadmapView({ path }: Props) {
           <TopicCard key={topic.id} topic={topic} pathId={path._id} index={i} />
         ))}
       </div>
+
+      {rootCause && rootCause.totalAnalyses > 0 && (
+        <div className="mt-6 border border-amber-500/25 bg-amber-500/5 rounded-xl p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <p className="text-sm font-semibold">Learning Diagnostic Map</p>
+            <span className="text-[11px] text-muted-foreground">({rootCause.totalAnalyses} analyses)</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border bg-background/70 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold">Misconception Hotspots</p>
+              </div>
+              <div className="space-y-2">
+                {rootCause.misconceptionHotspots.slice(0, 5).map((item, index) => (
+                  <div key={`${item.label}-${index}`}>
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="truncate pr-2">{item.label}</span>
+                      <span>{item.count}</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500"
+                        style={{
+                          width: `${Math.max(12, Math.round((item.count / Math.max(rootCause.misconceptionHotspots[0]?.count || 1, 1)) * 100))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                {rootCause.misconceptionHotspots.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No major misconception clusters yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-background/70 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold">Most Fragile Prerequisites</p>
+              </div>
+              <div className="space-y-2">
+                {rootCause.prerequisiteHotspots.slice(0, 5).map((item, index) => (
+                  <div key={`${item.topic}-${index}`} className="text-[11px] rounded-md border border-border/70 p-2">
+                    <p className="font-medium">{item.topic}</p>
+                    <p className="text-muted-foreground">Detected {item.count} time{item.count !== 1 ? "s" : ""}</p>
+                  </div>
+                ))}
+                {rootCause.prerequisiteHotspots.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No prerequisite blockers detected yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {rootCause.weakSubtopics.length > 0 && (
+            <div className="rounded-lg border border-border bg-background/70 p-3">
+              <p className="text-xs font-semibold mb-2">Topics You Should Revisit First</p>
+              <div className="space-y-2">
+                {rootCause.weakSubtopics.slice(0, 5).map((item, index) => (
+                  <div key={`${item.topicTitle}-${item.subtopicTitle}-${index}`} className="text-[11px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-medium">{item.topicTitle} → {item.subtopicTitle}</p>
+                      <span>{item.confidenceScore}% confidence</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500" style={{ width: `${Math.max(8, item.confidenceScore)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {path.status === "completed" && (
         <div className="mt-6 text-center p-4 border border-green-500/30 rounded-xl bg-green-500/5">
