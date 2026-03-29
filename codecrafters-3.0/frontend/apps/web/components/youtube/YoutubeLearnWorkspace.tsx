@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertCircle, Link2, Loader2, NotebookPen, PlayCircle, Sparkles } from "lucide-react"
 import {
   askTranscriptQuestion,
   fetchTranscript,
+  getRelatedTranscriptVideos,
   summarizeTranscript,
+  type LearningYouTubeVideo,
   type TranscriptChatMessage,
   type TranscriptResponse,
 } from "@/lib/api"
@@ -25,9 +27,36 @@ export function YoutubeLearnWorkspace(_: Props) {
   const [transcriptChat, setTranscriptChat] = useState<(TranscriptChatMessage & { related?: boolean })[]>([])
   const [transcriptQuestion, setTranscriptQuestion] = useState("")
   const [isTranscriptAnswering, setIsTranscriptAnswering] = useState(false)
+  const [relatedVideos, setRelatedVideos] = useState<LearningYouTubeVideo[]>([])
+  const [relatedError, setRelatedError] = useState<string | null>(null)
+  const [isLoadingRelated, setIsLoadingRelated] = useState(false)
+  const [selectedRelatedVideoId, setSelectedRelatedVideoId] = useState<string | null>(null)
+  const transcriptChatRef = useRef<HTMLDivElement | null>(null)
   const transcriptWordCount = transcriptResult?.fullText
     ? transcriptResult.fullText.split(/\s+/).filter(Boolean).length
     : 0
+
+  useEffect(() => {
+    if (!transcriptChatRef.current) return
+    transcriptChatRef.current.scrollTop = transcriptChatRef.current.scrollHeight
+  }, [transcriptChat, isTranscriptAnswering])
+
+  async function loadRelatedVideos(videoId: string, title?: string) {
+    setIsLoadingRelated(true)
+    setRelatedError(null)
+
+    try {
+      const { videos } = await getRelatedTranscriptVideos({ videoId, title })
+      setRelatedVideos(videos)
+      setSelectedRelatedVideoId(videos[0]?.videoId ?? null)
+    } catch (e) {
+      setRelatedVideos([])
+      setSelectedRelatedVideoId(null)
+      setRelatedError((e as Error).message)
+    } finally {
+      setIsLoadingRelated(false)
+    }
+  }
 
   async function handleFetchTranscript() {
     const videoId = extractYouTubeVideoId(transcriptUrl)
@@ -46,6 +75,9 @@ export function YoutubeLearnWorkspace(_: Props) {
       setTranscriptSummary(null)
       setTranscriptChat([])
       setTranscriptQuestion("")
+      setRelatedVideos([])
+      setSelectedRelatedVideoId(null)
+      void loadRelatedVideos(result.videoId, result.title)
     } catch (e) {
       setTranscriptResult(null)
       setTranscriptError((e as Error).message)
@@ -158,14 +190,14 @@ export function YoutubeLearnWorkspace(_: Props) {
     )
   }
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-4 md:px-6">
+    <div className="mx-auto flex w-full max-w-none flex-1 flex-col gap-4 px-4 py-4 md:px-6">
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="border-b border-border bg-muted/30 px-4 py-3">
           <div className="flex items-center gap-2">
             <PlayCircle className="h-4 w-4 text-primary" />
             <div>
               <p className="text-sm font-semibold">YouTube Transcript Assistant</p>
-              <p className="text-xs text-muted-foreground">Fetch transcript, summarize, and ask questions with Gemini.</p>
+              <p className="text-xs text-muted-foreground">Fetch transcript, summarize, and ask questions.</p>
             </div>
           </div>
         </div>
@@ -236,60 +268,152 @@ export function YoutubeLearnWorkspace(_: Props) {
                 </div>
               )}
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                  <div className="flex items-center gap-2">
-                    <NotebookPen className="h-4 w-4 text-primary" />
-                    <p className="text-sm font-semibold">Ask about this transcript</p>
-                  </div>
-
-                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-dashed border-border/70 bg-muted/30 p-2 text-sm">
-                    {transcriptChat.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No questions yet. Ask something about the video.</p>
-                    ) : (
-                      transcriptChat.map((msg, idx) => (
-                        <div
-                          key={`${msg.role}-${idx}-${msg.content.slice(0, 12)}`}
-                          className={`rounded-md px-3 py-2 text-[13px] ${msg.role === "user" ? "bg-primary/10 text-foreground" : "bg-muted text-foreground"}`}
-                        >
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {msg.role === "user" ? "You" : msg.related === false ? "AI (unrelated)" : "AI"}
-                          </p>
-                          {renderMessageContent(msg)}
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-2 md:flex-row">
-                    <input
-                      value={transcriptQuestion}
-                      onChange={(e) => setTranscriptQuestion(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          void handleTranscriptAsk()
-                        }
-                      }}
-                      placeholder="Ask a question about this transcript..."
-                      className="h-10 w-full rounded-md border border-border bg-muted/20 px-3 text-sm outline-none transition-colors focus:border-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void handleTranscriptAsk()}
-                      disabled={isTranscriptAnswering}
-                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-sm transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isTranscriptAnswering ? <Loader2 className="h-4 w-4 animate-spin" /> : <NotebookPen className="h-4 w-4" />}
-                      {isTranscriptAnswering ? "Thinking..." : "Ask"}
-                    </button>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transcript</p>
+                  <div className="mt-2 max-h-[360px] overflow-y-auto rounded-md border border-dashed border-border/60 bg-muted/20 p-3 text-sm leading-relaxed text-foreground">
+                    <div className="whitespace-pre-wrap">{transcriptResult.fullText}</div>
                   </div>
                 </div>
 
                 <div className="rounded-lg border border-border bg-background p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transcript</p>
-                  <div className="mt-2 max-h-[320px] overflow-y-auto rounded-md border border-dashed border-border/60 bg-muted/20 p-3 text-sm leading-relaxed text-foreground">
-                    <div className="whitespace-pre-wrap">{transcriptResult.fullText}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Related videos</p>
+                    {isLoadingRelated ? (
+                      <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Loading
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {relatedError ? (
+                    <p className="mt-2 text-xs text-destructive">{relatedError}</p>
+                  ) : relatedVideos.length === 0 && !isLoadingRelated ? (
+                    <p className="mt-2 text-xs text-muted-foreground">No related videos found yet.</p>
+                  ) : (
+                    <div className="mt-2 space-y-3">
+                      {selectedRelatedVideoId ? (
+                        <div className="overflow-hidden rounded-lg border border-border bg-black">
+                          <iframe
+                            title="Related video"
+                            src={`https://www.youtube.com/embed/${selectedRelatedVideoId}`}
+                            className="aspect-video w-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                          />
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-2">
+                        {relatedVideos.map((video) => (
+                          <button
+                            key={video.videoId}
+                            onClick={() => setSelectedRelatedVideoId(video.videoId)}
+                            className={`w-full rounded-lg border p-2 text-left transition-colors ${
+                              selectedRelatedVideoId === video.videoId
+                                ? "border-primary bg-primary/10"
+                                : "border-border hover:bg-muted/40"
+                            }`}
+                          >
+                            <div className="flex gap-2">
+                              <img
+                                src={video.thumbnailUrl}
+                                alt={video.title}
+                                className="h-14 w-24 flex-shrink-0 rounded object-cover"
+                              />
+                              <div className="min-w-0 space-y-1">
+                                <p className="text-xs font-semibold line-clamp-2">{video.title}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">{video.channelTitle}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-border bg-background">
+                <div className="border-b border-border bg-muted/30 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <NotebookPen className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-semibold">Transcript Chat</p>
+                  </div>
+                </div>
+
+                <div className="flex h-[440px] flex-col">
+                  <div
+                    ref={transcriptChatRef}
+                    className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-3"
+                  >
+                    {transcriptChat.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border/80 bg-background px-3 py-4 text-center text-xs text-muted-foreground">
+                        Start chatting about this video. Ask for explanation, formulas, key points, or quick revision.
+                      </div>
+                    ) : (
+                      transcriptChat.map((msg, idx) => (
+                        <div
+                          key={`${msg.role}-${idx}-${msg.content.slice(0, 12)}`}
+                          className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed shadow-sm ${
+                              msg.role === "user"
+                                ? "rounded-br-md bg-primary text-primary-foreground"
+                                : "rounded-bl-md border border-border bg-background text-foreground"
+                            }`}
+                          >
+                            <p
+                              className={`mb-1 text-[10px] uppercase tracking-wide ${
+                                msg.role === "user"
+                                  ? "text-primary-foreground/80"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {msg.role === "user" ? "You" : msg.related === false ? "AI (unrelated)" : "AI"}
+                            </p>
+                            {renderMessageContent(msg)}
+                          </div>
+                        </div>
+                      ))
+                    )}
+
+                    {isTranscriptAnswering && (
+                      <div className="flex justify-start">
+                        <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-sm">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          AI is thinking...
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-border bg-background p-3">
+                    <div className="flex flex-col gap-2 md:flex-row">
+                      <input
+                        value={transcriptQuestion}
+                        onChange={(e) => setTranscriptQuestion(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            void handleTranscriptAsk()
+                          }
+                        }}
+                        placeholder="Ask a question about this transcript..."
+                        className="h-10 w-full rounded-md border border-border bg-muted/20 px-3 text-sm outline-none transition-colors focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleTranscriptAsk()}
+                        disabled={isTranscriptAnswering}
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border px-4 text-sm transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isTranscriptAnswering ? <Loader2 className="h-4 w-4 animate-spin" /> : <NotebookPen className="h-4 w-4" />}
+                        {isTranscriptAnswering ? "Thinking..." : "Send"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

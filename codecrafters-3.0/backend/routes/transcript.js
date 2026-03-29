@@ -97,4 +97,75 @@ router.post("/qa", async (req, res) => {
   }
 });
 
+// Fetch related YouTube videos using Data API (fallbacks to query search when needed)
+router.get("/related", async (req, res) => {
+  const requestedQuery = String(req.query?.q || "").trim();
+  const youtubeUrl = String(req.query?.youtubeUrl || "").trim();
+  const videoIdParam = String(req.query?.videoId || "").trim();
+  const title = String(req.query?.title || "").trim();
+
+  const videoId = extractYouTubeVideoId(youtubeUrl) || videoIdParam;
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({ success: false, error: "YOUTUBE_API_KEY is not configured." });
+  }
+
+  try {
+    let effectiveQuery = requestedQuery || title;
+    if (!effectiveQuery && videoId) {
+      try {
+        effectiveQuery = await fetchYouTubeTitle(videoId);
+      } catch {
+        // Ignore title fetch failures and use fallback query.
+      }
+    }
+    effectiveQuery = (effectiveQuery || "learning tutorial").trim();
+
+    const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+    searchUrl.searchParams.set("part", "snippet");
+    searchUrl.searchParams.set("type", "video");
+    searchUrl.searchParams.set("videoEmbeddable", "true");
+    searchUrl.searchParams.set("maxResults", "6");
+    searchUrl.searchParams.set("q", effectiveQuery);
+    searchUrl.searchParams.set("key", apiKey);
+
+    const ytRes = await fetch(searchUrl.toString());
+    const ytJson = await ytRes.json();
+
+    if (!ytRes.ok) {
+      const errMessage = ytJson?.error?.message || "Failed to fetch related videos.";
+      return res.status(502).json({ success: false, error: errMessage });
+    }
+
+    const items = Array.isArray(ytJson?.items) ? ytJson.items : [];
+    const videos = items
+      .map((item) => {
+        const vid = item?.id?.videoId;
+        const snippet = item?.snippet || {};
+        if (!vid) return null;
+        return {
+          videoId: vid,
+          title: snippet.title || "Untitled video",
+          channelTitle: snippet.channelTitle || "",
+          description: snippet.description || "",
+          publishedAt: snippet.publishedAt || null,
+          thumbnailUrl:
+            snippet?.thumbnails?.high?.url ||
+            snippet?.thumbnails?.medium?.url ||
+            snippet?.thumbnails?.default?.url ||
+            "",
+          url: `https://www.youtube.com/watch?v=${vid}`,
+          embedUrl: `https://www.youtube.com/embed/${vid}`,
+        };
+      })
+      .filter(Boolean);
+
+    return res.json({ success: true, videos, query: effectiveQuery });
+  } catch (err) {
+    const message = err?.message || "Failed to fetch related videos.";
+    return res.status(500).json({ success: false, error: message });
+  }
+});
+
 module.exports = router;

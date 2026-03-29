@@ -612,6 +612,22 @@ export async function askTranscriptQuestion(
   return handleResponse<{ answer: string; related: boolean }>(res)
 }
 
+export async function getRelatedTranscriptVideos(
+  payload: { videoId?: string; title?: string; youtubeUrl?: string }
+): Promise<{ videos: LearningYouTubeVideo[]; query: string }> {
+  const url = new URL(`${BACKEND}/api/transcript/related`)
+  if (payload.videoId?.trim()) url.searchParams.set("videoId", payload.videoId.trim())
+  if (payload.youtubeUrl?.trim()) url.searchParams.set("youtubeUrl", payload.youtubeUrl.trim())
+  if (payload.title?.trim()) {
+    const q = payload.title.trim()
+    url.searchParams.set("title", q)
+    url.searchParams.set("q", q)
+  }
+
+  const res = await fetch(url.toString())
+  return handleResponse(res)
+}
+
 // ---------------------------------------------------------------------------
 // Learning Platform Types
 // ---------------------------------------------------------------------------
