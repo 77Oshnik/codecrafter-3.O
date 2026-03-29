@@ -8,6 +8,8 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Button } from "@workspace/ui/components/button"
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5001"
+
 export function LoginForm() {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -19,6 +21,17 @@ export function LoginForm() {
     e.preventDefault()
     setError("")
     setLoading(true)
+
+    try {
+      const health = await fetch(`${BACKEND_URL}/`, { method: "GET" })
+      if (!health.ok) {
+        throw new Error("Backend unreachable")
+      }
+    } catch {
+      setError(`Could not reach backend at ${BACKEND_URL}. Start backend server first.`)
+      setLoading(false)
+      return
+    }
 
     const result = await signIn("credentials", {
       email: email.trim().toLowerCase(),
