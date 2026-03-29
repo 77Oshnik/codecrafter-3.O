@@ -159,6 +159,12 @@ function authHeaders(token: string): HeadersInit {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    console.error("[api] request failed", {
+      url: res.url,
+      status: res.status,
+      statusText: res.statusText,
+      body,
+    })
     throw new Error(body.error ?? `Request failed (${res.status})`)
   }
   return res.json() as Promise<T>
@@ -557,4 +563,310 @@ export async function askTranscriptQuestion(
   })
 
   return handleResponse<{ answer: string; related: boolean }>(res)
+}
+
+// ---------------------------------------------------------------------------
+// Learning Platform Types
+// ---------------------------------------------------------------------------
+export interface LearningPathSummary {
+  _id: string
+  topic: string
+  userLevel: "beginner" | "intermediate" | "advanced"
+  status: "assessing" | "active" | "completed"
+  overallProgress: number
+  totalTopics: number
+  completedTopics: number
+  createdAt: string
+  lastActiveAt: string
+}
+
+export interface Subtopic {
+  id: string
+  title: string
+  description: string
+  type?: "core" | "revision" | "remedial"
+  adaptive?: boolean
+  sourceSubtopicId?: string
+  unlockReason?: "quiz-failed" | "low-confidence" | "scheduled-review" | null
+  status: "locked" | "available" | "completed"
+  quizScore?: number
+  quizAttempts: number
+  contentGenerated: boolean
+  completedAt?: string
+}
+
+export interface RoadmapTopic {
+  id: string
+  title: string
+  description: string
+  order: number
+  difficulty: "beginner" | "intermediate" | "advanced"
+  estimatedTime: string
+  status: "locked" | "available" | "in-progress" | "completed"
+  subtopics: Subtopic[]
+  completedAt?: string
+}
+
+export interface LearningPath extends LearningPathSummary {
+  userLevel: "beginner" | "intermediate" | "advanced"
+  assessmentScore: number
+  levelExplanation: string
+  strengths: string[]
+  weaknesses: string[]
+  roadmap: RoadmapTopic[]
+  recentResults?: { topicId: string; subtopicId: string; percentage: number; createdAt: string }[]
+  weakTopics?: { topicTitle: string; subtopicTitle: string; confidenceScore: number }[]
+}
+
+export interface AssessmentQuestion {
+  id: string
+  question: string
+  options: string[]
+  difficulty: "easy" | "medium" | "hard"
+  subtopic: string
+}
+
+export interface TopicContent {
+  _id: string
+  topicTitle: string
+  subtopicTitle: string
+  userLevel: string
+  mainTopic: string
+  content: string
+  keyPoints: string[]
+  youtubeSearchQuery: string
+  quizId?: string
+}
+
+export interface LearningYouTubeVideo {
+  videoId: string
+  title: string
+  channelTitle: string
+  description: string
+  publishedAt: string | null
+  thumbnailUrl: string
+  url: string
+  embedUrl: string
+}
+
+export interface LearningQuizQuestion {
+  index: number
+  question: string
+  options: string[]
+}
+
+export interface LearningQuizFeedback {
+  question: string
+  selectedIndex: number
+  correctIndex: number
+  isCorrect: boolean
+  explanation: string
+}
+
+export interface LearningQuizSubmitResult {
+  score: number
+  total: number
+  percentage: number
+  passed: boolean
+  feedback: LearningQuizFeedback[]
+  nextInfo?: {
+    type: "subtopic" | "topic"
+    topicId: string
+    subtopicId: string
+    title: string
+    subtopicType?: "core" | "revision" | "remedial"
+  } | null
+  confidenceScore: number
+  nextReviewAt: string
+  message: string
+}
+
+export interface MemoryItem {
+  topicTitle: string
+  subtopicTitle: string
+  mainTopic?: string
+  confidenceScore: number
+  nextReviewAt?: string
+  intervalDays?: number
+  isWeak?: boolean
+}
+
+export interface LearningDashboard {
+  activePaths: LearningPathSummary[]
+  completedPaths: LearningPathSummary[]
+  totalPaths: number
+  totalQuizzes: number
+  avgScore: number
+  weakTopics: MemoryItem[]
+  strongTopics: MemoryItem[]
+  dueForReview: MemoryItem[]
+  recentActivity: { topicId: string; subtopicId: string; percentage: number; createdAt: string }[]
+}
+
+// ---------------------------------------------------------------------------
+// Learning Platform API
+// ---------------------------------------------------------------------------
+export async function startLearningAssessment(
+  token: string,
+  topic: string
+): Promise<{ assessmentId: string; topic: string; questions: AssessmentQuestion[] }> {
+  const res = await fetch(`${BACKEND}/api/learning/start`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ topic }),
+  })
+  return handleResponse(res)
+}
+
+export async function submitLearningAssessment(
+  token: string,
+  assessmentId: string,
+  answers: number[]
+): Promise<{
+  learningPathId: string
+  score: number
+  level: "beginner" | "intermediate" | "advanced"
+  explanation: string
+  strengths: string[]
+  weaknesses: string[]
+  recommendation: string
+  totalTopics: number
+}> {
+  const res = await fetch(`${BACKEND}/api/learning/assessment/${assessmentId}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ answers }),
+  })
+  return handleResponse(res)
+}
+
+export async function listLearningPaths(token: string): Promise<LearningPathSummary[]> {
+  const res = await fetch(`${BACKEND}/api/learning/paths`, {
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
+}
+
+export async function getLearningPath(token: string, id: string): Promise<LearningPath> {
+  const res = await fetch(`${BACKEND}/api/learning/paths/${id}`, {
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
+}
+
+export async function deleteLearningPath(token: string, id: string): Promise<void> {
+  const res = await fetch(`${BACKEND}/api/learning/paths/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
+}
+
+export async function getSubtopicContent(
+  token: string,
+  pathId: string,
+  topicId: string,
+  subtopicId: string
+): Promise<TopicContent> {
+  const res = await fetch(
+    `${BACKEND}/api/learning/paths/${pathId}/topics/${topicId}/subtopics/${subtopicId}/content`,
+    { headers: authHeaders(token) }
+  )
+  return handleResponse(res)
+}
+
+export async function getSubtopicQuiz(
+  token: string,
+  pathId: string,
+  topicId: string,
+  subtopicId: string
+): Promise<{ quizId: string; questions: LearningQuizQuestion[] }> {
+  console.log("[api] getSubtopicQuiz request", {
+    pathId,
+    topicId,
+    subtopicId,
+    hasToken: Boolean(token),
+  })
+  const res = await fetch(
+    `${BACKEND}/api/learning/paths/${pathId}/topics/${topicId}/subtopics/${subtopicId}/quiz`,
+    { headers: authHeaders(token) }
+  )
+  console.log("[api] getSubtopicQuiz response", {
+    pathId,
+    topicId,
+    subtopicId,
+    status: res.status,
+    ok: res.ok,
+  })
+  return handleResponse(res)
+}
+
+export async function getSubtopicVideos(
+  token: string,
+  pathId: string,
+  topicId: string,
+  subtopicId: string,
+  q?: string
+): Promise<{ query: string; videos: LearningYouTubeVideo[] }> {
+  const url = new URL(
+    `${BACKEND}/api/learning/paths/${pathId}/topics/${topicId}/subtopics/${subtopicId}/videos`
+  )
+  if (q?.trim()) {
+    url.searchParams.set("q", q.trim())
+  }
+  const res = await fetch(url.toString(), { headers: authHeaders(token) })
+  return handleResponse(res)
+}
+
+export async function submitSubtopicQuiz(
+  token: string,
+  pathId: string,
+  topicId: string,
+  subtopicId: string,
+  quizId: string,
+  answers: number[]
+): Promise<LearningQuizSubmitResult> {
+  const requestBody = { pathId, topicId, subtopicId, answers }
+  console.log("[api] submitSubtopicQuiz request", {
+    quizId,
+    pathId,
+    topicId,
+    subtopicId,
+    answerCount: answers.length,
+    answers,
+  })
+
+  const res = await fetch(
+    `${BACKEND}/api/learning/quiz/${quizId}/submit`,
+    {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(requestBody),
+    }
+  )
+
+  console.log("[api] submitSubtopicQuiz response", {
+    quizId,
+    status: res.status,
+    ok: res.ok,
+  })
+
+  return handleResponse(res)
+}
+
+export async function getLearningDashboard(token: string): Promise<LearningDashboard> {
+  const res = await fetch(`${BACKEND}/api/learning/dashboard`, {
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
+}
+
+export async function getMemoryData(
+  token: string,
+  pathId: string
+): Promise<{ dueToday: MemoryItem[]; upcoming: MemoryItem[]; mastered: MemoryItem[] }> {
+  const res = await fetch(`${BACKEND}/api/learning/memory/${pathId}`, {
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
 }
