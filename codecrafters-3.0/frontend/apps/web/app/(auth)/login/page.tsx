@@ -16,9 +16,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const justVerified = params.verified === "true"
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-md border-border/70 bg-card/90">
       <CardHeader className="text-center">
-        <CardTitle className="text-xl">Welcome back</CardTitle>
+        <CardTitle className="font-heading text-2xl">Welcome back</CardTitle>
         <CardDescription>
           {justVerified
             ? "Email verified! Sign in to continue."

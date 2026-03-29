@@ -10,6 +10,12 @@ import {
   CheckCircle,
   AlertCircle,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Menu,
+  Sparkles,
+  MessageSquare,
   FileText,
 } from "lucide-react"
 import { ConversationSidebar } from "./ConversationSidebar"
@@ -55,6 +61,7 @@ import {
   type StudyResourceItem,
   type StudyResultItem,
 } from "@/lib/api"
+import { clamp, uiConfig } from "@/lib/ui-config"
 
 function buildRevisionBullets(text: string): string[] {
   const lines = text.split("\n").map((line) => line.trim())
@@ -72,6 +79,20 @@ function buildRevisionBullets(text: string): string[] {
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 0)
     .slice(0, 8)
+}
+
+interface WorkspaceLayoutState {
+  leftWidth: number
+  rightWidth: number
+  leftCollapsed: boolean
+  rightCollapsed: boolean
+}
+
+const defaultWorkspaceLayout: WorkspaceLayoutState = {
+  leftWidth: uiConfig.dashboard.left.defaultWidthPx,
+  rightWidth: uiConfig.dashboard.right.defaultWidthPx,
+  leftCollapsed: false,
+  rightCollapsed: false,
 }
 
 interface PendingDeleteAction {
@@ -116,6 +137,23 @@ export function ChatInterface() {
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteAction | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const workspaceRef = useRef<HTMLDivElement | null>(null)
+  const resizeCleanupRef = useRef<(() => void) | null>(null)
+
+  const [layout, setLayout] = useState<WorkspaceLayoutState>(defaultWorkspaceLayout)
+  const [isDesktop, setIsDesktop] = useState(true)
+  const [isLayoutReady, setIsLayoutReady] = useState(false)
+  const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false)
+  const [isRightDrawerOpen, setIsRightDrawerOpen] = useState(false)
+  const [resizingSide, setResizingSide] = useState<"left" | "right" | null>(null)
+
+  const leftPanelWidth = layout.leftCollapsed
+    ? uiConfig.dashboard.left.collapsedWidthPx
+    : layout.leftWidth
+
+  const rightPanelWidth = layout.rightCollapsed
+    ? uiConfig.dashboard.right.collapsedWidthPx
+    : layout.rightWidth
 
   // Load conversations on mount
   useEffect(() => {
@@ -148,6 +186,166 @@ export function ChatInterface() {
       })
       .catch(() => {})
   }, [token, activeId])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const media = window.matchMedia(`(min-width: ${uiConfig.dashboard.breakpointPx}px)`)
+
+    const syncViewport = () => {
+      const desktop = media.matches
+      setIsDesktop(desktop)
+
+      if (desktop) {
+        setIsLeftDrawerOpen(false)
+        setIsRightDrawerOpen(false)
+      } else {
+        setLayout((prev) => ({
+          ...prev,
+          leftCollapsed: true,
+          rightCollapsed: true,
+        }))
+      }
+    }
+
+    syncViewport()
+    media.addEventListener("change", syncViewport)
+
+    return () => {
+      media.removeEventListener("change", syncViewport)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const saved = window.localStorage.getItem(uiConfig.dashboard.storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<WorkspaceLayoutState>
+        setLayout({
+          leftWidth: clamp(
+            Number(parsed.leftWidth) || defaultWorkspaceLayout.leftWidth,
+            uiConfig.dashboard.left.minWidthPx,
+            uiConfig.dashboard.left.maxWidthPx
+          ),
+          rightWidth: clamp(
+            Number(parsed.rightWidth) || defaultWorkspaceLayout.rightWidth,
+            uiConfig.dashboard.right.minWidthPx,
+            uiConfig.dashboard.right.maxWidthPx
+          ),
+          leftCollapsed: Boolean(parsed.leftCollapsed),
+          rightCollapsed: Boolean(parsed.rightCollapsed),
+        })
+      }
+    } catch {
+      // Ignore malformed user storage and keep defaults.
+    }
+
+    setIsLayoutReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isLayoutReady || typeof window === "undefined") return
+
+    try {
+      window.localStorage.setItem(uiConfig.dashboard.storageKey, JSON.stringify(layout))
+    } catch {
+      // Storage write failure should not impact runtime behavior.
+    }
+  }, [layout, isLayoutReady])
+
+  const toggleLeftCollapsed = useCallback(() => {
+    setLayout((prev) => ({ ...prev, leftCollapsed: !prev.leftCollapsed }))
+  }, [])
+
+  const toggleRightCollapsed = useCallback(() => {
+    setLayout((prev) => ({ ...prev, rightCollapsed: !prev.rightCollapsed }))
+  }, [])
+
+  const startPanelResize = useCallback(
+    (side: "left" | "right", event: React.PointerEvent<HTMLButtonElement>) => {
+      if (!isDesktop) return
+
+      event.preventDefault()
+      setResizingSide(side)
+
+      if (typeof document !== "undefined") {
+        document.body.style.cursor = "col-resize"
+        document.body.style.userSelect = "none"
+      }
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const container = workspaceRef.current
+        if (!container) return
+
+        const rect = container.getBoundingClientRect()
+        const reservedSpace =
+          uiConfig.dashboard.minContentWidthPx + uiConfig.dashboard.handleWidthPx * 2
+
+        setLayout((prev) => {
+          const nextBase: WorkspaceLayoutState = {
+            ...prev,
+            leftCollapsed: side === "left" ? false : prev.leftCollapsed,
+            rightCollapsed: side === "right" ? false : prev.rightCollapsed,
+          }
+
+          const currentLeft = nextBase.leftCollapsed
+            ? uiConfig.dashboard.left.collapsedWidthPx
+            : nextBase.leftWidth
+          const currentRight = nextBase.rightCollapsed
+            ? uiConfig.dashboard.right.collapsedWidthPx
+            : nextBase.rightWidth
+
+          if (side === "left") {
+            const rawLeft = moveEvent.clientX - rect.left
+            const maxLeftByContent = rect.width - currentRight - reservedSpace
+            const maxLeft = clamp(
+              maxLeftByContent,
+              uiConfig.dashboard.left.minWidthPx,
+              uiConfig.dashboard.left.maxWidthPx
+            )
+
+            return {
+              ...nextBase,
+              leftWidth: clamp(rawLeft, uiConfig.dashboard.left.minWidthPx, maxLeft),
+            }
+          }
+
+          const rawRight = rect.right - moveEvent.clientX
+          const maxRightByContent = rect.width - currentLeft - reservedSpace
+          const maxRight = clamp(
+            maxRightByContent,
+            uiConfig.dashboard.right.minWidthPx,
+            uiConfig.dashboard.right.maxWidthPx
+          )
+
+          return {
+            ...nextBase,
+            rightWidth: clamp(rawRight, uiConfig.dashboard.right.minWidthPx, maxRight),
+          }
+        })
+      }
+
+      const clearPointerListeners = () => {
+        window.removeEventListener("pointermove", onPointerMove)
+        window.removeEventListener("pointerup", clearPointerListeners)
+        setResizingSide(null)
+
+        if (typeof document !== "undefined") {
+          document.body.style.cursor = ""
+          document.body.style.userSelect = ""
+        }
+
+        resizeCleanupRef.current = null
+      }
+
+      resizeCleanupRef.current = clearPointerListeners
+      window.addEventListener("pointermove", onPointerMove)
+      window.addEventListener("pointerup", clearPointerListeners)
+    },
+    [isDesktop]
+  )
 
   const refreshStudySidebar = useCallback(
     async (conversationId: string) => {
@@ -187,8 +385,13 @@ export function ChatInterface() {
     [stopPolling]
   )
 
-  // Clean up poll on unmount
-  useEffect(() => () => stopPolling(), [stopPolling])
+  // Clean up polling and pointer listeners on unmount.
+  useEffect(() => {
+    return () => {
+      stopPolling()
+      resizeCleanupRef.current?.()
+    }
+  }, [stopPolling])
 
   const handleNewConversation = useCallback(() => {
     setActiveId(null)
@@ -700,6 +903,13 @@ export function ChatInterface() {
     [openSavedQuiz, openSavedFlashcards, openSavedFlowchart]
   )
 
+  const closeDrawers = useCallback(() => {
+    setIsLeftDrawerOpen(false)
+    setIsRightDrawerOpen(false)
+  }, [])
+
+  const canGenerateRevision = Boolean(token && activeId && documents.length > 0)
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       <ConversationSidebar
@@ -707,18 +917,20 @@ export function ChatInterface() {
         activeConversationId={activeId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
-        onDeleteConversation={handleDeleteConversation}
-        collapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-      />
+        onDeleteConversation={handleDeleteConversation} collapsed={false} onToggleCollapse={function (): void {
+          throw new Error("Function not implemented.")
+        } }      />
 
       <main className="flex h-full min-w-0 flex-1">
         <section className="flex h-full min-w-0 flex-1 flex-col">
           {/* Error banner */}
           {error && (
-            <div className="bg-destructive/10 border-b border-destructive/30 text-destructive text-xs px-4 py-2 flex items-center gap-2">
+            <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/12 px-4 py-2 text-xs text-destructive">
               <span className="flex-1">{error}</span>
-              <button onClick={() => setError(null)} className="underline hover:no-underline shrink-0">
+              <button
+                onClick={() => setError(null)}
+                className="rounded-full border border-destructive/30 px-2 py-0.5 transition-colors hover:bg-destructive/12"
+              >
                 Dismiss
               </button>
             </div>
@@ -726,26 +938,24 @@ export function ChatInterface() {
 
           <MessageList messages={messages} isLoading={isLoading} />
 
-          {/* Document accordion */}
-          <div className="border-t border-border bg-background/60">
-            {/* Upload row */}
-            <div className="flex items-center justify-between px-4 py-2">
-              <span className="text-xs font-medium text-muted-foreground">
+          <div className="border-t border-border/70 bg-background/62">
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+              <span className="text-sm font-medium text-muted-foreground">
                 {documents.length === 0
-                  ? "No documents"
+                  ? "No documents uploaded"
                   : `${documents.length} document${documents.length > 1 ? "s" : ""}`}
               </span>
               <label
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-xs transition-colors hover:border-primary hover:text-primary ${
+                className={`animated-button cta-glow inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-primary/45 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-primary/92 ${
                   uploading ? "pointer-events-none opacity-60" : ""
                 }`}
               >
                 {uploading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Paperclip className="h-3 w-3" />
+                  <Paperclip className="h-4 w-4" />
                 )}
-                <span>{uploading ? "Uploading…" : "Add PDF"}</span>
+                <span>{uploading ? "Uploading..." : "Add PDF"}</span>
                 <input
                   type="file"
                   accept="application/pdf"
@@ -756,38 +966,35 @@ export function ChatInterface() {
               </label>
             </div>
 
-            {/* Accordion items */}
             {documents.length > 0 && (
-              <div className="max-h-60 divide-y divide-border overflow-y-auto border-t border-border">
+              <div className="max-h-60 divide-y divide-border/75 overflow-y-auto border-t border-border/70 bg-background/45">
                 {documents.map((doc, index) => {
                   const docId = doc._id || `${doc.name}-${doc.createdAt ?? "unknown"}-${index}`
                   const isOpen = expandedDocId === docId
                   return (
-                    <div key={docId}>
-                      {/* Header row */}
-                      <div className="flex items-center gap-2 px-4 py-2">
+                    <div key={docId} className="interactive-card">
+                      <div className="flex items-center gap-2 px-4 py-2.5">
                         {doc.status === "processing" ? (
-                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-yellow-500" />
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-yellow-600" />
                         ) : doc.status === "ready" ? (
-                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                         ) : (
                           <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
                         )}
                         <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="flex-1 truncate text-xs">{doc.name}</span>
+                        <span className="flex-1 truncate text-xs font-medium">{doc.name}</span>
 
                         {doc.status === "ready" && (
-                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                          <span className="shrink-0 rounded-full border border-border/75 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
                             {doc.chunkCount} chunks
                           </span>
                         )}
 
-                        {/* Generate summary button */}
                         {doc.status === "ready" && !doc.summary && (
                           <button
                             onClick={() => handleGenerateSummary(docId)}
                             disabled={generatingSummaryId === docId}
-                            className="shrink-0 text-[10px] text-primary underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-50"
+                            className="animated-button rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:border-primary/45 disabled:cursor-not-allowed disabled:opacity-50"
                             title="Generate summary"
                           >
                             {generatingSummaryId === docId ? (
@@ -798,11 +1005,10 @@ export function ChatInterface() {
                           </button>
                         )}
 
-                        {/* Expand toggle */}
                         {doc.status === "ready" && doc.summary && (
                           <button
                             onClick={() => setExpandedDocId(isOpen ? null : docId)}
-                            className="rounded p-0.5 transition-colors hover:bg-accent"
+                            className="rounded-md border border-border/65 bg-background/70 p-1 transition-colors hover:border-primary/40 hover:text-primary"
                             title={isOpen ? "Hide summary" : "Show summary"}
                           >
                             <ChevronDown
@@ -816,16 +1022,15 @@ export function ChatInterface() {
                             if (isOpen) setExpandedDocId(null)
                             handleDeleteDocument(docId, doc.name)
                           }}
-                          className="shrink-0 rounded p-0.5 transition-colors hover:text-destructive"
+                          className="rounded-md border border-border/65 bg-background/70 p-1 transition-colors hover:border-destructive/40 hover:text-destructive"
                           title="Remove document"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
 
-                      {/* Summary panel */}
                       {isOpen && doc.summary && (
-                        <div className="whitespace-pre-wrap bg-muted/30 px-4 pb-3 text-xs leading-relaxed text-muted-foreground">
+                        <div className="whitespace-pre-wrap border-t border-border/60 bg-muted/30 px-4 pb-3.5 pt-2 text-xs leading-relaxed text-muted-foreground">
                           {doc.summary}
                         </div>
                       )}
@@ -834,13 +1039,12 @@ export function ChatInterface() {
                 })}
               </div>
             )}
-
           </div>
 
           <MessageInput
             onSend={handleSendMessage}
             disabled={isLoading || !token}
-            placeholder={token ? "Ask anything… (Shift+Enter for new line)" : "Loading…"}
+            placeholder={token ? "Ask anything... (Shift+Enter for new line)" : "Loading..."}
           />
         </section>
 
@@ -859,12 +1063,6 @@ export function ChatInterface() {
             results={studyResults}
             onOpenResource={(type, resourceRefId) => {
               void openStudyResource(type, resourceRefId)
-            }}
-            onDeleteResource={(resourceId) => {
-              void handleDeleteStudyResource(resourceId)
-            }}
-            onDeleteResult={(type, resultId) => {
-              void handleDeleteStudyResult(type, resultId)
             }}
           />
         </aside>

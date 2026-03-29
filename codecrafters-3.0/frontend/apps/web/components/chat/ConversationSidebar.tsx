@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, MessageSquare, Plus, Trash2 } from "lucide-react"
 import type { Conversation } from "@/lib/api"
+import { cn } from "@workspace/ui/lib/utils"
 
 interface Props {
   conversations: Conversation[]
@@ -11,6 +12,7 @@ interface Props {
   onDeleteConversation: (id: string) => void
   collapsed: boolean
   onToggleCollapse: () => void
+  className?: string
 }
 
 export function ConversationSidebar({
@@ -21,6 +23,7 @@ export function ConversationSidebar({
   onDeleteConversation,
   collapsed,
   onToggleCollapse,
+  className,
 }: Props) {
   return (
     <aside
@@ -51,19 +54,19 @@ export function ConversationSidebar({
       </div>
 
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto px-2.5 py-3.5">
         {conversations.length === 0 ? (
-          <p className="px-4 py-6 text-xs text-muted-foreground text-center">
+          <p className="rounded-xl border border-dashed border-border/75 bg-background/65 px-4 py-6 text-center text-sm text-muted-foreground">
             No conversations yet. Start one!
           </p>
         ) : (
           conversations.map((c) => (
             <div
               key={c._id}
-              className={`group mx-2 flex cursor-pointer items-center rounded-md py-2 transition-colors ${
+              className={`interactive-card group mb-2 flex cursor-pointer items-center gap-2.5 rounded-2xl border px-3.5 py-3 transition-all ${
                 activeConversationId === c._id
-                  ? "bg-accent text-accent-foreground"
-                  : "hover:bg-accent/50"
+                  ? "border-primary/40 bg-primary/12 text-foreground shadow-sm"
+                  : "border-border/60 bg-background/60 hover:border-primary/30 hover:bg-background"
               } ${collapsed ? "justify-center px-2" : "gap-2 px-3"}`}
               onClick={() => onSelectConversation(c._id)}
               title={collapsed ? c.title : undefined}
@@ -80,7 +83,7 @@ export function ConversationSidebar({
                 }`}
                 title="Delete conversation"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))

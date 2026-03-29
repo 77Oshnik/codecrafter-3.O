@@ -42,7 +42,7 @@ export function MessageInput({ onSend, disabled, placeholder = "Ask anything…"
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex items-end gap-2 border-t border-border px-4 py-3 bg-background"
+      className="flex items-end gap-2 border-t border-border/70 bg-background/75 px-4 py-3"
     >
       <textarea
         ref={textareaRef}
@@ -52,12 +52,12 @@ export function MessageInput({ onSend, disabled, placeholder = "Ask anything…"
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="flex-1 resize-none rounded-xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary transition-colors disabled:opacity-50 max-h-[200px] overflow-y-auto"
+        className="flex-1 max-h-50 resize-none overflow-y-auto rounded-2xl border border-border/75 bg-background/85 px-4 py-3 text-[0.95rem] shadow-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-ring/35 disabled:opacity-50"
       />
       <button
         type="submit"
         disabled={disabled || !value.trim()}
-        className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="animated-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {disabled ? (
           <Loader2 className="w-4 h-4 animate-spin" />

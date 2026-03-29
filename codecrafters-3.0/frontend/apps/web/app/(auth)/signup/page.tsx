@@ -9,9 +9,9 @@ import { SignupForm } from "@/components/auth/signup-form"
 
 export default function SignupPage() {
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-md border-border/70 bg-card/90">
       <CardHeader className="text-center">
-        <CardTitle className="text-xl">Create an account</CardTitle>
+        <CardTitle className="font-heading text-2xl">Create an account</CardTitle>
         <CardDescription>
           We&apos;ll send a verification code to your email.
         </CardDescription>

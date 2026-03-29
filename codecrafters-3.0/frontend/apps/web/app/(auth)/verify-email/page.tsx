@@ -22,9 +22,9 @@ export default async function VerifyEmailPage({ searchParams }: VerifyEmailPageP
   const email = decodeURIComponent(params.email)
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-md border-border/70 bg-card/90">
       <CardHeader className="text-center">
-        <CardTitle className="text-xl">Check your email</CardTitle>
+        <CardTitle className="font-heading text-2xl">Check your email</CardTitle>
         <CardDescription>Enter the 6-digit code to verify your account.</CardDescription>
       </CardHeader>
       <CardContent>

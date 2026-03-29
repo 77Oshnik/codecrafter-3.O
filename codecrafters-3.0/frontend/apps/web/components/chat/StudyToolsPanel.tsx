@@ -31,6 +31,7 @@ interface Props {
   disabled?: boolean
   onSelectTool: (tool: StudyTool) => void
   variant?: "inline" | "sidebar"
+  className?: string
   resources?: StudyResourceItem[]
   results?: StudyResultItem[]
   onOpenResource?: (type: StudyResourceItem["type"], resourceRefId: string) => void
@@ -96,6 +97,7 @@ export function StudyToolsPanel({
   disabled = false,
   onSelectTool,
   variant = "inline",
+  className,
   canGenerateRevision = false,
   generatingRevision = false,
   revisionText = "",
@@ -107,7 +109,8 @@ export function StudyToolsPanel({
   onOpenResource,
   onDeleteResource,
   onDeleteResult,
-}: Props) {  const isSidebar = variant === "sidebar"
+}: Props) {
+  const isSidebar = variant === "sidebar"
   const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false)
 
   useEffect(() => {
@@ -120,28 +123,28 @@ export function StudyToolsPanel({
     <section
       className={
         isSidebar
-          ? "flex h-full min-h-0 w-full flex-col bg-background/80"
-          : "border-b border-border bg-background/80 px-4 py-3"
+          ? `flex h-full min-h-0 w-full flex-col bg-background/70 ${className ?? ""}`
+          : `border-b border-border/70 bg-background/70 px-4 py-3 ${className ?? ""}`
       }
     >
-      <div className={isSidebar ? "border-b border-border px-4 py-3" : "mb-2 flex items-center justify-between"}>
+      <div className={isSidebar ? "border-b border-border/70 px-5 py-4" : "mb-2 flex items-center justify-between"}>
         <div>
-          <h3 className="text-sm font-semibold">Study Tools</h3>
-          <p className="text-xs text-muted-foreground">Generate learning content in one click.</p>
+          <h3 className="font-heading text-base font-semibold">Study Tools</h3>
+          <p className="text-sm text-muted-foreground">Generate learning content in one click.</p>
         </div>
       </div>
 
       <div
         className={
           isSidebar
-            ? "flex-1 min-h-0 overflow-y-auto px-3 py-2 [scrollbar-gutter:stable]"
+            ? "flex-1 min-h-0 overflow-y-auto px-4 py-3 [scrollbar-gutter:stable]"
             : ""
         }
       >
         <div
           className={
             isSidebar
-              ? "grid grid-cols-1 content-start gap-2"
+              ? "grid grid-cols-1 content-start gap-2.5"
               : "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
           }
         >
@@ -160,17 +163,17 @@ export function StudyToolsPanel({
                   onSelectTool(tool)
                 }}
                 disabled={disabled || (tool.id === "revision" && !canGenerateRevision) || (tool.id === "revision" && generatingRevision)}
-                className={`w-full text-left rounded-xl border border-border bg-linear-to-br ${tool.accent} p-3 transition-all hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`interactive-card animated-button w-full text-left rounded-2xl border border-border/75 bg-linear-to-br ${tool.accent} p-4 transition-all hover:border-primary/45 disabled:cursor-not-allowed disabled:opacity-50`}
               >
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="rounded-md border border-border/70 bg-background/60 p-1">
-                    <Icon className="h-3.5 w-3.5" />
+                <div className="mb-2 flex items-center gap-2.5">
+                  <span className="rounded-lg border border-border/70 bg-background/70 p-2 shadow-sm">
+                    <Icon className="h-4 w-4" />
                   </span>
-                  <span className="text-sm font-medium">
+                  <span className="text-base font-semibold leading-tight">
                     {tool.id === "revision" && generatingRevision ? "Generating..." : tool.title}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{tool.description}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{tool.description}</p>
               </button>
             )
           })}
@@ -178,9 +181,9 @@ export function StudyToolsPanel({
           {isSidebar && (
             <>
               <div className="mt-3 border-t border-border pt-3">
-                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Results</h4>
+                <h4 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Results</h4>
                 {results.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                  <p className="rounded-xl border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
                     No results yet.
                   </p>
                 ) : (
@@ -234,9 +237,9 @@ export function StudyToolsPanel({
               </div>
 
               <div className="mt-3 border-t border-border pt-3">
-                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Study Resources</h4>
+                <h4 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Study Resources</h4>
                 {resources.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                  <p className="rounded-xl border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
                     No resources generated yet.
                   </p>
                 ) : (
@@ -291,33 +294,33 @@ export function StudyToolsPanel({
 
       {isRevisionDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-background shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <p className="text-sm font-semibold">Revision Sheet</p>
+          <div className="surface-elevated w-full max-w-2xl rounded-3xl border border-border/80 bg-background/90 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+              <p className="font-heading text-base font-semibold">Revision Sheet</p>
               <button
                 type="button"
                 onClick={() => setIsRevisionDialogOpen(false)}
-                className="rounded p-1 transition-colors hover:bg-accent"
+                className="animated-button rounded-lg border border-border/70 bg-background/75 p-1.5 transition-colors hover:border-primary/45 hover:text-primary"
                 aria-label="Close revision dialog"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto px-4 py-3">
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
               {generatingRevision ? (
                 <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Generating revision sheet...
                 </div>
               ) : (
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted/20 p-3 text-xs leading-relaxed text-foreground">
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-2xl border border-border/65 bg-muted/20 p-3 text-xs leading-relaxed text-foreground">
                   {revisionText || "No revision generated yet."}
                 </pre>
               )}
 
               {!generatingRevision && revisionBullets.length > 0 && (
-                <div className="mt-3 rounded bg-muted/20 p-3">
+                <div className="mt-3 rounded-2xl border border-border/65 bg-muted/20 p-3">
                   <p className="mb-1 text-xs font-semibold text-foreground">Quick Bullet Points</p>
                   <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
                     {revisionBullets.map((point, index) => (
@@ -328,12 +331,12 @@ export function StudyToolsPanel({
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+            <div className="flex items-center justify-end gap-2 border-t border-border/70 px-5 py-4">
               <button
                 type="button"
                 onClick={onGenerateRevision}
                 disabled={disabled || !canGenerateRevision || generatingRevision}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="animated-button inline-flex items-center gap-1 rounded-full border border-border/75 bg-background/75 px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generatingRevision && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Regenerate
@@ -342,7 +345,7 @@ export function StudyToolsPanel({
                 type="button"
                 onClick={onDownloadRevision}
                 disabled={!revisionText}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="animated-button inline-flex items-center gap-1 rounded-full border border-border/75 bg-background/75 px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
                 Download
