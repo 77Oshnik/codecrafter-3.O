@@ -146,6 +146,53 @@ export interface YouTubeVideoItem {
   createdAt: string
 }
 
+export interface DashboardSummary {
+  user: { id: string }
+  kpis: {
+    streakDays: number
+    avgLearningProgress: number
+    totalQuizzes: number
+    avgQuizScore: number
+  }
+  chat: {
+    totalConversations: number
+    totalMessages: number
+  }
+  learning: {
+    totalPaths: number
+    activePaths: number
+    completedPaths: number
+    dueToday: number
+    weakTopics: number
+    strongTopics: number
+    paths: Array<{
+      id: string
+      topic: string
+      status: string
+      overallProgress: number
+      completedTopics: number
+      totalTopics: number
+      lastActiveAt: string
+    }>
+    latestActivePath: { id: string; topic: string; overallProgress: number } | null
+  }
+  youtube: {
+    totalVideos: number
+    readyVideos: number
+  }
+  documents: {
+    totalDocuments: number
+    readyDocuments: number
+  }
+  recentActivity: Array<{
+    type: "quiz" | "chat" | "youtube"
+    title: string
+    score?: number
+    status?: string
+    createdAt: string
+  }>
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -866,6 +913,13 @@ export async function getMemoryData(
   pathId: string
 ): Promise<{ dueToday: MemoryItem[]; upcoming: MemoryItem[]; mastered: MemoryItem[] }> {
   const res = await fetch(`${BACKEND}/api/learning/memory/${pathId}`, {
+    headers: authHeaders(token),
+  })
+  return handleResponse(res)
+}
+
+export async function getDashboardSummary(token: string): Promise<DashboardSummary> {
+  const res = await fetch(`${BACKEND}/api/dashboard/summary`, {
     headers: authHeaders(token),
   })
   return handleResponse(res)

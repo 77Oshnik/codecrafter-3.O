@@ -10,6 +10,7 @@ const documentRoutes = require("./routes/documents");
 const studyRoutes = require("./routes/study");
 const youtubeRoutes = require("./routes/youtube");
 const learningRoutes = require("./routes/learning");
+const dashboardRoutes = require("./routes/dashboard");
 const LearningQuiz = require("./models/learningQuiz");
 const TopicContent = require("./models/topicContent");
 const LearningQuizResult = require("./models/learningQuizResult");
@@ -98,6 +99,7 @@ app.use("/api/study", studyRoutes);
 app.use("/api/youtube", youtubeRoutes);
 app.use("/api/transcript", transcriptRoutes);
 app.use("/api/learning", learningRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Global error handler - catches anything Express 5 passes via next(err)
 app.use((err, _req, res, _next) => {

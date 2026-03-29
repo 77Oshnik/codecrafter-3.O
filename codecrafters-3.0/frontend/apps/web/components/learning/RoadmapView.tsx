@@ -15,6 +15,13 @@ const LEVEL_BADGE = {
   advanced: "text-blue-600 bg-blue-500/10"
 }
 
+const TOPIC_STATUS_BADGE = {
+  completed: "bg-green-500/10 text-green-700 border-green-500/20",
+  available: "bg-primary/10 text-primary border-primary/20",
+  "in-progress": "bg-primary/10 text-primary border-primary/20",
+  locked: "bg-muted text-muted-foreground border-border",
+}
+
 function getSubtopicBadge(subtopic: RoadmapTopic["subtopics"][number]) {
   if (subtopic.type === "revision") return "Revision"
   if (subtopic.type === "remedial") return "Remedial"
@@ -32,17 +39,17 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
     : 0
 
   return (
-    <div className={`border rounded-xl overflow-hidden transition-all ${
-      topic.status === "locked" ? "opacity-50 border-border" :
-      topic.status === "completed" ? "border-green-500/30 bg-green-500/5" :
-      "border-primary/30 bg-primary/5"
+    <div className={`border rounded-2xl overflow-hidden transition-all ${
+      topic.status === "locked" ? "border-border/80 bg-background/60" :
+      topic.status === "completed" ? "border-green-500/25 bg-green-500/5" :
+      "border-primary/25 bg-primary/5"
     }`}>
       {/* Topic header */}
       <button
-        className="w-full p-4 flex items-start gap-3 text-left"
+        className="w-full p-5 flex items-start gap-3 text-left"
         onClick={() => topic.status !== "locked" && setExpanded(e => !e)}
       >
-        <div className="flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center text-xs font-semibold mt-0.5">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full border bg-background flex items-center justify-center text-xs font-semibold mt-0.5">
           {topic.status === "completed" ? (
             <CheckCircle className="w-5 h-5 text-green-500" />
           ) : topic.status === "locked" ? (
@@ -54,12 +61,15 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-medium">{topic.title}</h3>
+            <h3 className="text-sm font-semibold">{topic.title}</h3>
             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium capitalize ${LEVEL_BADGE[topic.difficulty]}`}>
               {topic.difficulty}
             </span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize ${TOPIC_STATUS_BADGE[topic.status] || TOPIC_STATUS_BADGE.locked}`}>
+              {topic.status}
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{topic.description}</p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{topic.description}</p>
           <div className="flex items-center gap-3 mt-1.5">
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" /> {topic.estimatedTime}
@@ -84,18 +94,18 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
 
       {/* Subtopics */}
       {expanded && topic.status !== "locked" && (
-        <div className="border-t border-border/50 px-4 pb-3 pt-2 space-y-1">
+        <div className="border-t border-border/50 px-4 pb-4 pt-3 space-y-1.5">
           {topic.subtopics.map(sub => (
             <button
               key={sub.id}
               onClick={() => sub.status !== "locked" && router.push(`/dashboard/learn/${pathId}/topic/${topic.id}?subtopic=${sub.id}`)}
               disabled={sub.status === "locked"}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all group ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group border ${
                 sub.status === "locked"
-                  ? "opacity-40 cursor-not-allowed"
+                  ? "opacity-45 cursor-not-allowed border-border bg-background/60"
                   : sub.status === "completed"
-                  ? "hover:bg-green-500/5"
-                  : "hover:bg-primary/10 cursor-pointer"
+                  ? "border-green-500/20 bg-green-500/5 hover:bg-green-500/10"
+                  : "border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer"
               }`}
             >
               <div className="flex-shrink-0">
@@ -137,10 +147,14 @@ function TopicCard({ topic, pathId, index }: { topic: RoadmapTopic; pathId: stri
 }
 
 export function RoadmapView({ path }: Props) {
+  const allSubtopics = path.roadmap.flatMap(topic => topic.subtopics)
+  const completedSubtopics = allSubtopics.filter(sub => sub.status === "completed").length
+  const adaptiveSubtopics = allSubtopics.filter(sub => sub.adaptive).length
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Path header */}
-      <div className="mb-6">
+      <div className="mb-6 border border-border rounded-2xl bg-background p-5">
         <div className="flex items-center gap-2 mb-1">
           <Brain className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-semibold">{path.topic}</h2>
@@ -148,7 +162,7 @@ export function RoadmapView({ path }: Props) {
             {path.userLevel}
           </span>
         </div>
-        <p className="text-sm text-muted-foreground mb-3">{path.levelExplanation}</p>
+        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{path.levelExplanation}</p>
 
         {/* Overall progress */}
         <div className="flex items-center gap-3">
@@ -160,13 +174,17 @@ export function RoadmapView({ path }: Props) {
           </div>
           <span className="text-sm font-medium text-primary">{path.overallProgress}%</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {path.completedTopics} of {path.totalTopics} topics completed
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span>{path.completedTopics} of {path.totalTopics} topics completed</span>
+          <span>•</span>
+          <span>{completedSubtopics} subtopics completed</span>
+          <span>•</span>
+          <span>{adaptiveSubtopics} adaptive steps</span>
+        </div>
       </div>
 
       {/* Roadmap topics */}
-      <div className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-2">
         {path.roadmap.map((topic, i) => (
           <TopicCard key={topic.id} topic={topic} pathId={path._id} index={i} />
         ))}

@@ -34,6 +34,12 @@ const STATUS_COLORS = {
   completed: "text-green-500"
 }
 
+const STATUS_BADGE = {
+  assessing: "bg-muted text-muted-foreground",
+  active: "bg-primary/10 text-primary",
+  completed: "bg-green-500/10 text-green-600"
+}
+
 export default function LearnPage() {
   const { data: session } = useSession()
   const router = useRouter()
@@ -43,6 +49,13 @@ export default function LearnPage() {
   const [paths, setPaths] = useState<LearningPathSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
+
+  const totalPaths = paths.length
+  const activePaths = paths.filter(p => p.status === "active").length
+  const completedPaths = paths.filter(p => p.status === "completed").length
+  const avgProgress = paths.length
+    ? Math.round(paths.reduce((sum, p) => sum + (p.overallProgress || 0), 0) / paths.length)
+    : 0
 
   useEffect(() => {
     if (!token) return
@@ -123,16 +136,21 @@ export default function LearnPage() {
         />
       )}
 
-      <div className="flex flex-col w-full h-full overflow-hidden">
+      <div className="flex flex-col w-full h-full overflow-hidden bg-muted/10">
         {/* Header */}
-        <header className="flex items-center justify-between px-5 py-3 border-b border-border bg-background flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Brain className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold">Learning Paths</span>
+        <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-background/95 backdrop-blur flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Learning Paths</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Build, track, and complete personalized roadmaps.
+            </p>
           </div>
           <button
             onClick={() => setStage({ type: "new-path" })}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             New Path
@@ -140,18 +158,18 @@ export default function LearnPage() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : paths.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <div className="max-w-xl mx-auto flex flex-col items-center justify-center py-24 text-center border border-dashed border-border rounded-2xl bg-background/70">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                 <BookOpen className="w-7 h-7 text-primary" />
               </div>
-              <h2 className="text-base font-semibold mb-2">Start Your Learning Journey</h2>
-              <p className="text-sm text-muted-foreground max-w-sm mb-5">
+              <h2 className="text-lg font-semibold mb-2">Start Your Learning Journey</h2>
+              <p className="text-sm text-muted-foreground max-w-md mb-6 px-4">
                 Enter any topic — we&apos;ll assess your level and create a personalized roadmap with AI-powered content, quizzes, and spaced repetition.
               </p>
               <button
@@ -163,57 +181,85 @@ export default function LearnPage() {
               </button>
             </div>
           ) : (
-            <div className="max-w-2xl mx-auto space-y-3">
-              {paths.map(path => (
-                <div
-                  key={path._id}
-                  className="group border border-border rounded-xl p-4 hover:border-primary/30 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/dashboard/learn/${path._id}`)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h3 className="text-sm font-semibold truncate">{path.topic}</h3>
-                        <span className={`text-xs capitalize font-medium ${LEVEL_COLORS[path.userLevel] || "text-muted-foreground"}`}>
-                          {path.userLevel}
-                        </span>
-                        <span className={`text-xs capitalize ${STATUS_COLORS[path.status]}`}>
-                          • {path.status}
-                        </span>
-                      </div>
+            <div className="max-w-6xl mx-auto space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="border border-border rounded-xl p-4 bg-background">
+                  <p className="text-xs text-muted-foreground">Total Paths</p>
+                  <p className="text-2xl font-semibold mt-1">{totalPaths}</p>
+                </div>
+                <div className="border border-border rounded-xl p-4 bg-background">
+                  <p className="text-xs text-muted-foreground">Active</p>
+                  <p className="text-2xl font-semibold mt-1 text-primary">{activePaths}</p>
+                </div>
+                <div className="border border-border rounded-xl p-4 bg-background">
+                  <p className="text-xs text-muted-foreground">Completed</p>
+                  <p className="text-2xl font-semibold mt-1 text-green-600">{completedPaths}</p>
+                </div>
+                <div className="border border-border rounded-xl p-4 bg-background">
+                  <p className="text-xs text-muted-foreground">Avg Progress</p>
+                  <p className="text-2xl font-semibold mt-1">{avgProgress}%</p>
+                </div>
+              </div>
 
-                      <div className="flex items-center gap-4 mb-2">
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Trophy className="w-3 h-3" />
-                          {path.completedTopics}/{path.totalTopics} topics
-                        </span>
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          {path.lastActiveAt ? new Date(path.lastActiveAt).toLocaleDateString() : "Not started"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${path.overallProgress}%` }}
-                          />
+              <div className="grid gap-4 md:grid-cols-2">
+                {paths.map(path => (
+                  <div
+                    key={path._id}
+                    className="group border border-border rounded-2xl p-4 bg-background hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                    onClick={() => router.push(`/dashboard/learn/${path._id}`)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold truncate">{path.topic}</h3>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full capitalize font-medium ${STATUS_BADGE[path.status]}`}>
+                            {path.status}
+                          </span>
+                          <span className={`text-[11px] capitalize font-medium ${LEVEL_COLORS[path.userLevel] || "text-muted-foreground"}`}>
+                            {path.userLevel}
+                          </span>
                         </div>
-                        <span className="text-xs font-medium text-primary">{path.overallProgress}%</span>
                       </div>
+
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(path._id) }}
+                        disabled={deleting === path._id}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-muted-foreground hover:text-destructive"
+                      >
+                        {deleting === path._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      </button>
                     </div>
 
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDelete(path._id) }}
-                      disabled={deleting === path._id}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-muted-foreground hover:text-destructive"
-                    >
-                      {deleting === path._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    </button>
+                    <div className="mt-4 flex items-center gap-4">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Trophy className="w-3.5 h-3.5" />
+                        {path.completedTopics}/{path.totalTopics} topics
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" />
+                        {path.lastActiveAt ? new Date(path.lastActiveAt).toLocaleDateString() : "Not started"}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${path.overallProgress}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold text-primary">{path.overallProgress}%</span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className={`text-xs capitalize ${STATUS_COLORS[path.status]}`}>
+                        {path.status === "completed" ? "Completed" : "In progress"}
+                      </span>
+                      <span className="text-xs text-primary font-medium">Open Path →</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
