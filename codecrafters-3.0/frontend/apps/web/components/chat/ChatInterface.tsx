@@ -62,6 +62,7 @@ import {
   type StudyResultItem,
 } from "@/lib/api"
 import { clamp, uiConfig } from "@/lib/ui-config"
+import { downloadRevisionPdf } from "@/lib/revision-pdf"
 
 function buildRevisionBullets(text: string): string[] {
   const lines = text.split("\n").map((line) => line.trim())
@@ -129,7 +130,7 @@ export function ChatInterface() {
   const [flowchartPromptOpen, setFlowchartPromptOpen] = useState(false)
   const [revisionText, setRevisionText] = useState("")
   const [revisionBullets, setRevisionBullets] = useState<string[]>([])
-  const [revisionFileName, setRevisionFileName] = useState("revision-notes.md")
+  const [revisionFileName, setRevisionFileName] = useState("revision-notes.pdf")
   const [generatingRevision, setGeneratingRevision] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -640,7 +641,7 @@ export function ChatInterface() {
       const result = await generateConversationRevision(token, activeId)
       setRevisionText(result.revision)
       setRevisionBullets(buildRevisionBullets(result.revision))
-      setRevisionFileName(result.fileName || "revision-notes.md")
+      setRevisionFileName(result.fileName || "revision-notes.pdf")
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -648,25 +649,21 @@ export function ChatInterface() {
     }
   }, [token, activeId, generatingRevision, documents.length])
 
-  const handleDownloadRevision = useCallback(() => {
+  const handleDownloadRevision = useCallback(async () => {
     if (!revisionText) return
 
-    const downloadText =
-      revisionBullets.length > 0
-        ? `${revisionText}\n\n## Quick Bullet Points\n${revisionBullets
-            .map((point) => `- ${point}`)
-            .join("\n")}`
-        : revisionText
+    try {
+      const combinedMarkdown =
+        revisionBullets.length > 0
+          ? `${revisionText}\n\n## Quick Bullet Points\n${revisionBullets
+              .map((point) => `- ${point}`)
+              .join("\n")}`
+          : revisionText
 
-    const blob = new Blob([downloadText], { type: "text/markdown;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = revisionFileName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+      await downloadRevisionPdf(combinedMarkdown, revisionFileName)
+    } catch {
+      setError("Could not generate PDF. Please try again.")
+    }
   }, [revisionText, revisionBullets, revisionFileName])
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {

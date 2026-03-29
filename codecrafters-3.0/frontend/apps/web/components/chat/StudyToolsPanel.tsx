@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { StudyResourceItem, StudyResultItem } from "@/lib/api"
+import { parseRevisionMarkdown } from "@/lib/revision-pdf"
 
 export interface StudyTool {
   id: string
@@ -112,6 +113,7 @@ export function StudyToolsPanel({
 }: Props) {
   const isSidebar = variant === "sidebar"
   const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false)
+  const revisionBlocks = parseRevisionMarkdown(revisionText)
 
   useEffect(() => {
     if (generatingRevision || revisionText || revisionBullets.length > 0) {
@@ -314,9 +316,45 @@ export function StudyToolsPanel({
                   Generating revision sheet...
                 </div>
               ) : (
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-2xl border border-border/65 bg-muted/20 p-3 text-xs leading-relaxed text-foreground">
-                  {revisionText || "No revision generated yet."}
-                </pre>
+                <div className="max-h-64 overflow-auto rounded-2xl border border-border/65 bg-muted/20 p-3 text-xs leading-relaxed text-foreground">
+                  {revisionBlocks.length === 0 ? (
+                    <p className="text-muted-foreground">No revision generated yet.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {revisionBlocks.map((block, index) => {
+                        if (block.type === "h1") {
+                          return <h3 key={`${block.type}-${index}`} className="text-base font-semibold">{block.text}</h3>
+                        }
+
+                        if (block.type === "h2") {
+                          return <h4 key={`${block.type}-${index}`} className="text-sm font-semibold">{block.text}</h4>
+                        }
+
+                        if (block.type === "h3") {
+                          return <h5 key={`${block.type}-${index}`} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{block.text}</h5>
+                        }
+
+                        if (block.type === "bullet") {
+                          return (
+                            <p key={`${block.type}-${index}`} className="text-xs text-foreground">
+                              • {block.text}
+                            </p>
+                          )
+                        }
+
+                        if (block.type === "numbered") {
+                          return (
+                            <p key={`${block.type}-${index}`} className="text-xs text-foreground">
+                              {block.order ?? 1}. {block.text}
+                            </p>
+                          )
+                        }
+
+                        return <p key={`${block.type}-${index}`} className="text-xs text-foreground">{block.text}</p>
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
 
               {!generatingRevision && revisionBullets.length > 0 && (
@@ -348,7 +386,7 @@ export function StudyToolsPanel({
                 className="animated-button inline-flex items-center gap-1 rounded-full border border-border/75 bg-background/75 px-3 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
-                Download
+                Download PDF
               </button>
             </div>
           </div>
