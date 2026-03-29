@@ -1,4 +1,4 @@
-# Codecrafters Learning Platform
+# NeuroTrack Learning Platform
 
 A full-stack AI learning companion combining personalized learning paths, a RAG-powered chat workspace, auto-generated quizzes/flashcards/flowcharts, and YouTube transcript Q&A. Screenshots live in `codecrafters-3.0/frontend/apps/web/public`.
 
