@@ -32,7 +32,7 @@ export function MessageList({ messages, isLoading }: Props) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 py-6 md:px-5">
+    <div className="scrollbar-middle-panel flex flex-1 flex-col gap-6 overflow-y-auto px-4 py-6 [scrollbar-gutter:stable] md:px-5">
       {messages.map((msg, i) => (
         <div key={msg.id ?? i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
           {/* Avatar */}

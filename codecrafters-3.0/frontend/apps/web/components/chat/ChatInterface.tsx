@@ -27,6 +27,7 @@ import { QuizModal } from "./QuizModal"
 import { FlashcardsModal } from "./FlashcardsModal"
 import { FlowchartModal } from "./FlowchartModal"
 import { FlowchartPromptModal } from "./FlowchartPromptModal"
+import { GeneratedRichText } from "./GeneratedRichText"
 import {
   listConversations,
   getConversation,
@@ -113,7 +114,6 @@ export function ChatInterface() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [studyResources, setStudyResources] = useState<StudyResourceItem[]>([])
   const [studyResults, setStudyResults] = useState<StudyResultItem[]>([])
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null)
   const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null)
   const [quizModalOpen, setQuizModalOpen] = useState(false)
@@ -908,162 +908,355 @@ export function ChatInterface() {
   const canGenerateRevision = Boolean(token && activeId && documents.length > 0)
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      <ConversationSidebar
-        conversations={conversations}
-        activeConversationId={activeId}
-        onSelectConversation={handleSelectConversation}
-        onNewConversation={handleNewConversation}
-        onDeleteConversation={handleDeleteConversation} collapsed={false} onToggleCollapse={function (): void {
-          throw new Error("Function not implemented.")
-        } }      />
+    <div className="h-full min-h-0 w-full overflow-hidden p-2 md:p-3">
+      <div
+        ref={workspaceRef}
+        className="surface-elevated dot-grid relative flex h-full min-h-0 w-full overflow-hidden rounded-[1.7rem] border border-border/75"
+      >
+        {isDesktop && (
+          <>
+            <aside
+              className="h-full min-h-0 overflow-hidden border-r border-border/70 bg-sidebar/52 transition-[width] duration-300"
+              style={{ width: `${leftPanelWidth}px` }}
+            >
+              <ConversationSidebar
+                conversations={conversations}
+                activeConversationId={activeId}
+                onSelectConversation={handleSelectConversation}
+                onNewConversation={handleNewConversation}
+                onDeleteConversation={handleDeleteConversation}
+                collapsed={layout.leftCollapsed}
+                onToggleCollapse={toggleLeftCollapsed}
+                className="w-full min-w-0 border-r-0 bg-transparent"
+              />
+            </aside>
 
-      <main className="flex h-full min-w-0 flex-1">
-        <section className="flex h-full min-w-0 flex-1 flex-col">
-          {/* Error banner */}
-          {error && (
-            <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/12 px-4 py-2 text-xs text-destructive">
-              <span className="flex-1">{error}</span>
+            <button
+              type="button"
+              onPointerDown={(event) => startPanelResize("left", event)}
+              className="resize-handle border-r border-border/70 bg-background/35 hover:bg-primary/10"
+              data-active={resizingSide === "left"}
+              aria-label="Resize chats section"
+            >
+              <GripVertical className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-muted-foreground/40" />
+            </button>
+          </>
+        )}
+
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background/50">
+          {!isDesktop && (
+            <div className="flex shrink-0 items-center justify-between border-b border-border/70 bg-background/58 px-3 py-2.5">
               <button
-                onClick={() => setError(null)}
-                className="rounded-full border border-destructive/30 px-2 py-0.5 transition-colors hover:bg-destructive/12"
+                type="button"
+                onClick={() => setIsLeftDrawerOpen(true)}
+                className="animated-button inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/45 hover:text-primary"
               >
-                Dismiss
+                <Menu className="h-3.5 w-3.5" />
+                Chats
+              </button>
+
+              <p className="font-heading text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Workspace</p>
+
+              <button
+                type="button"
+                onClick={() => setIsRightDrawerOpen(true)}
+                className="animated-button inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/45 hover:text-primary"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Tools
               </button>
             </div>
           )}
 
-          <MessageList messages={messages} isLoading={isLoading} />
-
-          <div className="border-t border-border/70 bg-background/62">
-            <div className="flex items-center justify-between gap-2 px-4 py-2.5">
-              <span className="text-sm font-medium text-muted-foreground">
-                {documents.length === 0
-                  ? "No documents uploaded"
-                  : `${documents.length} document${documents.length > 1 ? "s" : ""}`}
-              </span>
-              <label
-                className={`animated-button cta-glow inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-primary/45 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-primary/92 ${
-                  uploading ? "pointer-events-none opacity-60" : ""
-                }`}
-              >
-                {uploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Paperclip className="h-4 w-4" />
-                )}
-                <span>{uploading ? "Uploading..." : "Add PDF"}</span>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  className="hidden"
-                  onChange={handleFileChange}
-                  disabled={uploading}
-                />
-              </label>
-            </div>
-
-            {documents.length > 0 && (
-              <div className="max-h-60 divide-y divide-border/75 overflow-y-auto border-t border-border/70 bg-background/45">
-                {documents.map((doc, index) => {
-                  const docId = doc._id || `${doc.name}-${doc.createdAt ?? "unknown"}-${index}`
-                  const isOpen = expandedDocId === docId
-                  return (
-                    <div key={docId} className="interactive-card">
-                      <div className="flex items-center gap-2 px-4 py-2.5">
-                        {doc.status === "processing" ? (
-                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-yellow-600" />
-                        ) : doc.status === "ready" ? (
-                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                        ) : (
-                          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                        )}
-                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="flex-1 truncate text-xs font-medium">{doc.name}</span>
-
-                        {doc.status === "ready" && (
-                          <span className="shrink-0 rounded-full border border-border/75 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
-                            {doc.chunkCount} chunks
-                          </span>
-                        )}
-
-                        {doc.status === "ready" && !doc.summary && (
-                          <button
-                            onClick={() => handleGenerateSummary(docId)}
-                            disabled={generatingSummaryId === docId}
-                            className="animated-button rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:border-primary/45 disabled:cursor-not-allowed disabled:opacity-50"
-                            title="Generate summary"
-                          >
-                            {generatingSummaryId === docId ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              "Summarize"
-                            )}
-                          </button>
-                        )}
-
-                        {doc.status === "ready" && doc.summary && (
-                          <button
-                            onClick={() => setExpandedDocId(isOpen ? null : docId)}
-                            className="rounded-md border border-border/65 bg-background/70 p-1 transition-colors hover:border-primary/40 hover:text-primary"
-                            title={isOpen ? "Hide summary" : "Show summary"}
-                          >
-                            <ChevronDown
-                              className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                            />
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => {
-                            if (isOpen) setExpandedDocId(null)
-                            handleDeleteDocument(docId, doc.name)
-                          }}
-                          className="rounded-md border border-border/65 bg-background/70 p-1 transition-colors hover:border-destructive/40 hover:text-destructive"
-                          title="Remove document"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-
-                      {isOpen && doc.summary && (
-                        <div className="whitespace-pre-wrap border-t border-border/60 bg-muted/30 px-4 pb-3.5 pt-2 text-xs leading-relaxed text-muted-foreground">
-                          {doc.summary}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {error && (
+              <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/12 px-4 py-2 text-xs text-destructive">
+                <span className="flex-1">{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="rounded-full border border-destructive/30 px-2 py-0.5 transition-colors hover:bg-destructive/12"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
-          </div>
 
-          <MessageInput
-            onSend={handleSendMessage}
-            disabled={isLoading || !token}
-            placeholder={token ? "Ask anything... (Shift+Enter for new line)" : "Loading..."}
-          />
-        </section>
+            <MessageList messages={messages} isLoading={isLoading} />
 
-        <aside className="hidden h-full w-96 min-w-96 border-l border-border lg:flex xl:w-104 xl:min-w-104">
-          <StudyToolsPanel
-            disabled={isLoading || !token || isGeneratingQuiz || isSubmittingQuiz}
-            onSelectTool={handleSelectStudyTool}
-            canGenerateRevision={Boolean(token && activeId && documents.length > 0)}
-            generatingRevision={generatingRevision}
-            revisionText={revisionText}
-            revisionBullets={revisionBullets}
-            onGenerateRevision={() => void handleGenerateRevision()}
-            onDownloadRevision={handleDownloadRevision}
-            variant="sidebar"
-            resources={studyResources}
-            results={studyResults}
-            onOpenResource={(type, resourceRefId) => {
-              void openStudyResource(type, resourceRefId)
-            }}
-          />
-        </aside>
-      </main>
+            <div className="shrink-0 border-t border-border/70 bg-background/62">
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+                <span className="text-sm font-medium text-muted-foreground">
+                  {documents.length === 0
+                    ? "No documents uploaded"
+                    : `${documents.length} document${documents.length > 1 ? "s" : ""}`}
+                </span>
+                <label
+                  className={`animated-button cta-glow inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-primary/45 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-primary/92 ${
+                    uploading ? "pointer-events-none opacity-60" : ""
+                  }`}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="h-4 w-4" />
+                  )}
+                  <span>{uploading ? "Uploading..." : "Add PDF"}</span>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+
+              {documents.length > 0 && (
+                <div className="max-h-60 divide-y divide-border/75 overflow-y-auto border-t border-border/70 bg-background/45">
+                  {documents.map((doc, index) => {
+                    const docId = doc._id || `${doc.name}-${doc.createdAt ?? "unknown"}-${index}`
+                    const isOpen = expandedDocId === docId
+                    return (
+                      <div key={docId} className="interactive-card">
+                        <div className="flex items-center gap-2 px-4 py-2.5">
+                          {doc.status === "processing" ? (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-yellow-600" />
+                          ) : doc.status === "ready" ? (
+                            <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          ) : (
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                          )}
+                          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="flex-1 truncate text-xs font-medium">{doc.name}</span>
+
+                          {doc.status === "ready" && (
+                            <span className="shrink-0 rounded-full border border-border/75 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
+                              {doc.chunkCount} chunks
+                            </span>
+                          )}
+
+                          {doc.status === "ready" && !doc.summary && (
+                            <button
+                              onClick={() => handleGenerateSummary(docId)}
+                              disabled={generatingSummaryId === docId}
+                              className="animated-button rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:border-primary/45 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Generate summary"
+                            >
+                              {generatingSummaryId === docId ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Summarize"
+                              )}
+                            </button>
+                          )}
+
+                          {doc.status === "ready" && doc.summary && (
+                            <button
+                              onClick={() => setExpandedDocId(isOpen ? null : docId)}
+                              className="rounded-md border border-border/65 bg-background/70 p-1 transition-colors hover:border-primary/40 hover:text-primary"
+                              title={isOpen ? "Hide summary" : "Show summary"}
+                            >
+                              <ChevronDown
+                                className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                              />
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              if (isOpen) setExpandedDocId(null)
+                              handleDeleteDocument(docId, doc.name)
+                            }}
+                            className="rounded-md border border-border/65 bg-background/70 p-1 transition-colors hover:border-destructive/40 hover:text-destructive"
+                            title="Remove document"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {isOpen && doc.summary && (
+                          <div className="border-t border-border/60 bg-muted/30 px-4 pb-3.5 pt-2 text-xs leading-relaxed text-muted-foreground">
+                            <GeneratedRichText content={doc.summary} compact />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <MessageInput
+              onSend={handleSendMessage}
+              disabled={isLoading || !token}
+              placeholder={token ? "Ask anything... (Shift+Enter for new line)" : "Loading..."}
+            />
+          </section>
+        </main>
+
+        {isDesktop && (
+          <>
+            <button
+              type="button"
+              onPointerDown={(event) => startPanelResize("right", event)}
+              className="resize-handle border-l border-border/70 bg-background/35 hover:bg-primary/10"
+              data-active={resizingSide === "right"}
+              aria-label="Resize study tools section"
+            >
+              <GripVertical className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-muted-foreground/40" />
+            </button>
+
+            <aside
+              className="relative h-full min-h-0 overflow-hidden border-l border-border/70 bg-sidebar/48 transition-[width] duration-300"
+              style={{ width: `${rightPanelWidth}px` }}
+            >
+              {layout.rightCollapsed ? (
+                <div className="flex h-full flex-col items-center gap-3 px-2 py-4">
+                  <button
+                    type="button"
+                    onClick={toggleRightCollapsed}
+                    className="group animated-button relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background/85 transition-colors hover:border-primary/45 hover:text-primary"
+                    title="Expand study tools"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="hover-dialog right-full mr-2">Expand tools</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleRightCollapsed}
+                    className="group animated-button relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background/85 transition-colors hover:border-primary/45 hover:text-primary"
+                    title="Open study tools"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    <span className="hover-dialog right-full mr-2">Study tools</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <StudyToolsPanel
+                    disabled={isLoading || !token || isGeneratingQuiz || isSubmittingQuiz}
+                    onSelectTool={handleSelectStudyTool}
+                    canGenerateRevision={canGenerateRevision}
+                    generatingRevision={generatingRevision}
+                    revisionText={revisionText}
+                    revisionBullets={revisionBullets}
+                    onGenerateRevision={() => void handleGenerateRevision()}
+                    onDownloadRevision={handleDownloadRevision}
+                    variant="sidebar"
+                    resources={studyResources}
+                    results={studyResults}
+                    onDeleteResource={handleDeleteStudyResource}
+                    onDeleteResult={handleDeleteStudyResult}
+                    onOpenResource={(type, resourceRefId) => {
+                      void openStudyResource(type, resourceRefId)
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={toggleRightCollapsed}
+                    className="animated-button absolute bottom-3 left-3 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-background/85 text-muted-foreground transition-colors hover:border-primary/45 hover:text-primary"
+                    title="Collapse study tools"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </aside>
+          </>
+        )}
+
+        {!isDesktop && (
+          <>
+            {(isLeftDrawerOpen || isRightDrawerOpen) && (
+              <button
+                type="button"
+                onClick={closeDrawers}
+                className="absolute inset-0 z-20 bg-black/35 backdrop-blur-[2px]"
+                aria-label="Close side panels"
+              />
+            )}
+
+            <aside
+              className={`absolute inset-y-0 left-0 z-30 w-[min(86vw,360px)] transition-transform duration-300 ${
+                isLeftDrawerOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+              <div className="surface-elevated h-full border-r border-border/70 bg-sidebar/90">
+                <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+                  <p className="font-heading text-sm font-semibold">Chats</p>
+                  <button
+                    type="button"
+                    onClick={() => setIsLeftDrawerOpen(false)}
+                    className="animated-button inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-background/70 transition-colors hover:border-primary/45 hover:text-primary"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <ConversationSidebar
+                  conversations={conversations}
+                  activeConversationId={activeId}
+                  onSelectConversation={(id) => {
+                    handleSelectConversation(id)
+                    setIsLeftDrawerOpen(false)
+                  }}
+                  onNewConversation={() => {
+                    handleNewConversation()
+                    setIsLeftDrawerOpen(false)
+                  }}
+                  onDeleteConversation={handleDeleteConversation}
+                  collapsed={false}
+                  onToggleCollapse={() => setIsLeftDrawerOpen(false)}
+                  className="w-full min-w-0 border-r-0 bg-transparent"
+                />
+              </div>
+            </aside>
+
+            <aside
+              className={`absolute inset-y-0 right-0 z-30 w-[min(88vw,390px)] transition-transform duration-300 ${
+                isRightDrawerOpen ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              <div className="surface-elevated h-full border-l border-border/70 bg-sidebar/90">
+                <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+                  <p className="font-heading text-sm font-semibold">Study Tools</p>
+                  <button
+                    type="button"
+                    onClick={() => setIsRightDrawerOpen(false)}
+                    className="animated-button inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-background/70 transition-colors hover:border-primary/45 hover:text-primary"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <StudyToolsPanel
+                  disabled={isLoading || !token || isGeneratingQuiz || isSubmittingQuiz}
+                  onSelectTool={(tool) => {
+                    setIsRightDrawerOpen(false)
+                    void handleSelectStudyTool(tool)
+                  }}
+                  canGenerateRevision={canGenerateRevision}
+                  generatingRevision={generatingRevision}
+                  revisionText={revisionText}
+                  revisionBullets={revisionBullets}
+                  onGenerateRevision={() => void handleGenerateRevision()}
+                  onDownloadRevision={handleDownloadRevision}
+                  variant="sidebar"
+                  resources={studyResources}
+                  results={studyResults}
+                  onDeleteResource={handleDeleteStudyResource}
+                  onDeleteResult={handleDeleteStudyResult}
+                  onOpenResource={(type, resourceRefId) => {
+                    setIsRightDrawerOpen(false)
+                    void openStudyResource(type, resourceRefId)
+                  }}
+                />
+              </div>
+            </aside>
+          </>
+        )}
+      </div>
 
       <QuizModal
         open={quizModalOpen}
