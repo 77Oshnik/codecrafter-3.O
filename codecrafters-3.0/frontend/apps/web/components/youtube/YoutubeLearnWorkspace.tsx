@@ -102,9 +102,7 @@ export function YoutubeLearnWorkspace(_: Props) {
         history,
       })
 
-      const cleanedAnswer = answer
-        .replace(/^AI\s*\n?/i, "") // drop leading model tag if present
-        .trim()
+      const cleanedAnswer = normalizeAnswer(answer)
 
       setTranscriptChat((prev) => [...prev, { role: "assistant", content: cleanedAnswer, related }])
     } catch (e) {
@@ -118,6 +116,46 @@ export function YoutubeLearnWorkspace(_: Props) {
   function formatPreviewFileName(kind: "summary" | "notes", title: string) {
     const safe = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
     return `${kind}-${safe || "youtube-video"}.md`
+  }
+
+  function normalizeAnswer(text: string) {
+    const trimmed = String(text || "").replace(/^AI\s*\n?/i, "").trim()
+    const lines = trimmed
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*[\*\-]\s+/, "• ").trimEnd())
+    const compact = lines.join("\n").replace(/\n{3,}/g, "\n\n")
+    return compact.trim()
+  }
+
+  function renderMessageContent(msg: TranscriptChatMessage & { related?: boolean }) {
+    const text = msg.content || ""
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    const bulletLines = lines.filter((l) => /^•\s+/.test(l))
+
+    const renderLine = (line: string) => {
+      const html = line
+        .replace(/^•\s+/, "")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      return <span dangerouslySetInnerHTML={{ __html: html }} />
+    }
+
+    if (bulletLines.length >= Math.max(3, Math.floor(lines.length / 2))) {
+      return (
+        <ul className="list-disc space-y-1 pl-5 text-[13px]">
+          {bulletLines.map((line, idx) => (
+            <li key={`${line}-${idx}`}>{renderLine(line)}</li>
+          ))}
+        </ul>
+      )
+    }
+
+    return (
+      <div className="space-y-1 text-[13px]">
+        {lines.map((line, idx) => (
+          <p key={`${line}-${idx}`} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>") }} />
+        ))}
+      </div>
+    )
   }
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-4 md:px-6">
@@ -217,7 +255,7 @@ export function YoutubeLearnWorkspace(_: Props) {
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                             {msg.role === "user" ? "You" : msg.related === false ? "AI (unrelated)" : "AI"}
                           </p>
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          {renderMessageContent(msg)}
                         </div>
                       ))
                     )}
